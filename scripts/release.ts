@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-import { parseArgs } from 'node:util';
 /**
  * Release all workspace packages together (they share one version).
  *
@@ -21,6 +20,7 @@ import { parseArgs } from 'node:util';
  * `bun run release` again: it resumes from the local release commit. When the
  * version is already on npm for every package, it does nothing.
  */
+import { parseArgs } from 'node:util';
 import { $ } from 'bun';
 
 const PACKAGES = ['packages/registry', 'packages/vite', 'packages/cli'];
