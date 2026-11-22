@@ -56,7 +56,6 @@
 		"@guestlinelabs/oc-registry": "workspace:*"
 	},
 	"publishConfig": {
-		"access": "public",
-		"tag": "alpha"
+		"access": "public"
 	}
 }

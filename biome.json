@@ -9,6 +9,7 @@
 		"ignoreUnknown": false,
 		"includes": [
 			"packages/**/*",
+			"scripts/**/*",
 			"!packages/*/dist/**/*",
 			"!packages/*/node_modules/**/*",
 			"!packages/registry/src/components/oc-client/**/*",

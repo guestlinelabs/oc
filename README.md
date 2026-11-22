@@ -30,24 +30,31 @@ bun run lint
 
 ## Releasing
 
-All three packages are versioned together (currently `1.0.0-alpha.0`) and
-publish with the `alpha` dist-tag (`publishConfig.tag`).
+All three packages share one version and are released together with one
+command, from a clean `main` that matches `origin/main`, logged in to npm
+with publish access to the `@guestlinelabs` scope (`npm login`):
 
-1. Bump `version` in `packages/registry`, `packages/vite` and `packages/cli`.
-2. `bun run release:check` (tests, type-check and a dry-run pack of each
-   package).
-3. Publish in dependency order, logged in to npm with access to the
-   `@guestlinelabs` scope:
+```bash
+bun run release              # publish the current version (first release)
+bun run release prerelease   # 1.0.0-alpha.0 -> 1.0.0-alpha.1
+bun run release patch        # or minor / major; 1.0.0-alpha.3 -> 1.0.0
+bun run release 1.2.0        # an explicit version
+bun run release patch --dry-run
+```
 
-   ```bash
-   (cd packages/registry && bun publish)
-   (cd packages/vite && bun publish)
-   (cd packages/cli && bun publish)
-   ```
+The script ([scripts/release.ts](scripts/release.ts)):
 
-   Use `bun publish` rather than `npm publish`: it replaces the
-   `workspace:*` dependencies with the published versions. `prepublishOnly`
-   rebuilds the whole workspace first.
+1. runs `release:check` (lint, tests, type-check, dry-run pack);
+2. sets the new version in every package and `bun.lock`, commits
+   `Release vX` and tags `vX`;
+3. runs `bun publish --recursive`, which publishes in dependency order,
+   replaces `workspace:*` with the real version and skips versions already
+   on npm. Prereleases go to their dist-tag (`alpha`), others to `latest`;
+4. pushes the commit and the tag.
+
+With npm two-factor auth, pass `--otp <code>` or answer the prompt. If a
+publish fails part-way, fix the cause and run `bun run release` again; it
+resumes from the local release commit and only publishes what is missing.
 
 ## License
 

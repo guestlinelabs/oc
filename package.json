@@ -6,12 +6,13 @@
 	],
 	"scripts": {
 		"build": "bun run --filter @guestlinelabs/oc-registry build && bun run --filter @guestlinelabs/oc-vite build && bun run --filter @guestlinelabs/oc build",
-		"test": "bun run build && bun run --filter '*' test",
+		"test": "bun run build && bun run --filter '*' test && bun test scripts",
 		"test-silent": "bun run build && bun run --filter '*' test-silent",
 		"typecheck": "bun run build && bun run --filter '*' typecheck",
 		"lint": "biome ci .",
 		"release:check": "bun run lint && bun run test && bun run typecheck && bun run --filter '@guestlinelabs/*' pack:dry",
-		"lint:fix": "biome check --write ."
+		"lint:fix": "biome check --write .",
+		"release": "bun scripts/release.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.8",
