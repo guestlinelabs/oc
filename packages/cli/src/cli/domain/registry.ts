@@ -1,4 +1,3 @@
-import { OC_VERSION } from '@guestlinelabs/oc-registry/version';
 import * as urlBuilder from '@guestlinelabs/oc-registry/registry/domain/url-builder';
 import settings from '@guestlinelabs/oc-registry/resources/settings';
 import type { Component } from '@guestlinelabs/oc-registry/types';
@@ -8,6 +7,7 @@ import {
   setOcConfig
 } from '@guestlinelabs/oc-registry/utils/ocConfig';
 import put from '@guestlinelabs/oc-registry/utils/put';
+import { OC_VERSION } from '@guestlinelabs/oc-registry/version';
 import * as urlParser from '../domain/url-parser';
 
 // The `oc-cli-<version>` user agent carries the OC-compatible version

@@ -12,7 +12,8 @@ describe('registry : routes : components', () => {
   let code;
   let response;
   const templates = {
-    'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+    'oc-template-es6': require('../../dist/registry/domain/templates')
+      .es6Template
   };
 
   const initialise = (params) => {

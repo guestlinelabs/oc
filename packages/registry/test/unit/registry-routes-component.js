@@ -15,7 +15,8 @@ describe('registry : routes : component', () => {
   let componentRoute;
 
   const templates = {
-    'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+    'oc-template-es6': require('../../dist/registry/domain/templates')
+      .es6Template
   };
   const initialise = (params) => {
     resJsonStub = sinon.stub();
@@ -238,7 +239,7 @@ describe('registry : routes : component', () => {
     });
   });
 
-  describe('when getting a component with server.js execution errors', () => {
+  describe('when getting a component with asynchronous server.js execution errors', () => {
     describe('when has error that gets fired on first execution', () => {
       before((done) => {
         initialise(mockedComponents['async-error-component']);
@@ -327,15 +328,13 @@ describe('registry : routes : component', () => {
       });
 
       it('should return 200 status code for successful request', () => {
-        expect(
-          responses.find((r) => r.status === 200 && !r.response.error)
-        ).to.not.be.undefined;
+        expect(responses.find((r) => r.status === 200 && !r.response.error)).to
+          .not.be.undefined;
       });
 
       it('should return 500 status code when error happens', () => {
-        expect(
-          responses.find((r) => r.status === 500 && r.response.error)
-        ).to.not.be.undefined;
+        expect(responses.find((r) => r.status === 500 && r.response.error)).to
+          .not.be.undefined;
       });
 
       it('should respond without error for successful request', () => {
@@ -621,7 +620,8 @@ describe('registry : routes : component', () => {
         mockedComponents['another-response-headers-component'];
       const simpleComponent = mockedComponents['simple-component'];
       const templates = {
-        'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+        'oc-template-es6': require('../../dist/registry/domain/templates')
+          .es6Template
       };
 
       mockedRepository = {

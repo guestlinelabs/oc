@@ -25,7 +25,7 @@ describe('registry : domain : sanitiser', () => {
         expect(sanitisedParameters).to.eql({ isTrue: true });
       });
 
-      it('should convert string to boolean when true', () => {
+      it('should convert string to boolean when false', () => {
         const componentParameters = {
           isTrue: {
             type: 'boolean',

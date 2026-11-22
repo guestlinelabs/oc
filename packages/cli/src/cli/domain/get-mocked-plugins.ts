@@ -1,8 +1,8 @@
 import path from 'node:path';
 
 import strings from '@guestlinelabs/oc-registry/resources';
-import type { Logger } from '../logger';
 import { getOcConfig } from '@guestlinelabs/oc-registry/utils/ocConfig';
+import type { Logger } from '../logger';
 
 interface MockedPlugin {
   register: (options: unknown, dependencies: unknown, next: () => void) => void;

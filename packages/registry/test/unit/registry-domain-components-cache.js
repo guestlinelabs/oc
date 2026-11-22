@@ -324,5 +324,4 @@ describe('registry : domain : components-cache', () => {
       });
     });
   });
-
 });

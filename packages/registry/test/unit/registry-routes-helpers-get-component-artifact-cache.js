@@ -38,7 +38,8 @@ const makeArtifacts = (label) => ({
 
 const makeRepository = (label) => {
   const artifacts = makeArtifacts(label);
-  const es6Template = require('../../dist/registry/domain/templates').es6Template;
+  const es6Template =
+    require('../../dist/registry/domain/templates').es6Template;
   return {
     getCompiledView: sinon.stub().resolves(artifacts.template),
     getComponent: sinon.stub().resolves(artifacts.component),
@@ -50,9 +51,11 @@ const makeRepository = (label) => {
     getTemplatesInfo: sinon
       .stub()
       .returns([{ type: 'oc-template-es6', version: '7.0.6', externals: [] }]),
-    getTemplate: sinon.stub().callsFake((type) =>
-      type === 'oc-template-es6' ? es6Template : undefined
-    ),
+    getTemplate: sinon
+      .stub()
+      .callsFake((type) =>
+        type === 'oc-template-es6' ? es6Template : undefined
+      ),
     getStaticFilePath: sinon.stub().returns('//cdn.invalid/files/')
   };
 };
@@ -80,10 +83,7 @@ describe('registry : routes : helpers : get-component : artifact cache', () => {
   it('isolates env, provider, and template artifacts between registries', async () => {
     const firstRepository = makeRepository('first');
     const secondRepository = makeRepository('second');
-    const first = GetComponent(
-      { plugins: {}, templates: [] },
-      firstRepository
-    );
+    const first = GetComponent({ plugins: {}, templates: [] }, firstRepository);
     const second = GetComponent(
       { plugins: {}, templates: [] },
       secondRepository
@@ -120,10 +120,7 @@ describe('registry : routes : helpers : get-component : artifact cache', () => {
       content: artifacts.provider,
       filePath: '/retry/server.js'
     });
-    const renderer = GetComponent(
-      { plugins: {}, templates: [] },
-      repository
-    );
+    const renderer = GetComponent({ plugins: {}, templates: [] }, repository);
 
     const failed = await Promise.all([render(renderer), render(renderer)]);
     expect(failed.map((result) => result.status)).to.deep.equal([502, 502]);
@@ -139,10 +136,7 @@ describe('registry : routes : helpers : get-component : artifact cache', () => {
 
   it('reloads providers and templates but preserves env caching in hot reload', async () => {
     const repository = makeRepository('hot');
-    const renderer = GetComponent(
-      { plugins: {}, templates: [] },
-      repository
-    );
+    const renderer = GetComponent({ plugins: {}, templates: [] }, repository);
 
     await render(renderer, { hotReloading: true });
     await render(renderer, { hotReloading: true });

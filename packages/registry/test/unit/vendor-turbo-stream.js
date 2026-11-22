@@ -3,14 +3,19 @@ const expect = require('chai').expect;
 // The vendored copy under src/vendor/turbo-stream must produce byte-identical
 // output to the published @rdevis/turbo-stream package (kept as a
 // devDependency for this comparison only).
-const { encode: vendoredEncode } = require('../../dist/vendor/turbo-stream/turbo-stream.js');
+const {
+  encode: vendoredEncode
+} = require('../../dist/vendor/turbo-stream/turbo-stream.js');
 const { encode: realEncode } = require('@rdevis/turbo-stream');
 
 const streamToText = async (stream) => new Response(stream).text();
 
 describe('vendor : turbo-stream', () => {
   const cases = [
-    ['nested objects and arrays', { a: { b: [1, 'two', { c: null }], d: true } }],
+    [
+      'nested objects and arrays',
+      { a: { b: [1, 'two', { c: null }], d: true } }
+    ],
     [
       'promises resolving later',
       {
@@ -32,7 +37,13 @@ describe('vendor : turbo-stream', () => {
     ],
     [
       'mixed structures',
-      [1, 'x', null, true, { nested: { deep: [new Date(0), /re/g, new Map([['k', 'v']])] } }]
+      [
+        1,
+        'x',
+        null,
+        true,
+        { nested: { deep: [new Date(0), /re/g, new Map([['k', 'v']])] } }
+      ]
     ]
   ];
 

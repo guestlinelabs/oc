@@ -157,7 +157,8 @@ describe('registry : routes : component info mutation isolation', () => {
       JSON.parse(JSON.stringify(fixture.package))
     );
     const templates = {
-      'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+      'oc-template-es6': require('../../dist/registry/domain/templates')
+        .es6Template
     };
     const repository = {
       getCompiledView: sinon.stub().resolves(fixture.view),

@@ -10,12 +10,12 @@ expects, as an `oc-template-esm` component.
 
 ## Entry points
 
-| Import | Contents |
-| --- | --- |
-| `@guestlinelabs/oc-vite` | `Server`, `ServerError` and the data-provider types |
-| `@guestlinelabs/oc-vite/client` | `serverClient`, `getInitialData`, `getSettings`, `InitialData`, `ActionOutput`, `window.oc` and CSS module types |
-| `@guestlinelabs/oc-vite/renderer` | `createComponent`, `getShadowRoot` |
-| `@guestlinelabs/oc-vite/plugin` | `oc()` Vite plugin (also the default export) |
+| Import                            | Contents                                                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `@guestlinelabs/oc-vite`          | `Server`, `ServerError` and the data-provider types                                                              |
+| `@guestlinelabs/oc-vite/client`   | `serverClient`, `getInitialData`, `getSettings`, `InitialData`, `ActionOutput`, `window.oc` and CSS module types |
+| `@guestlinelabs/oc-vite/renderer` | `createComponent`, `getShadowRoot`                                                                               |
+| `@guestlinelabs/oc-vite/plugin`   | `oc()` Vite plugin (also the default export)                                                                     |
 
 ## Usage
 

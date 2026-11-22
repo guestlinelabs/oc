@@ -6,7 +6,10 @@ interface PublicInfo {
   team: string;
 }
 
-export const syncTransform: TransformInfo = ({ name, version }): PublicInfo => ({
+export const syncTransform: TransformInfo = ({
+  name,
+  version
+}): PublicInfo => ({
   name,
   version,
   team: 'payments'

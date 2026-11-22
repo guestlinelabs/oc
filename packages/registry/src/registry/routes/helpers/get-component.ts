@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
 import vm from 'node:vm';
-import createRenderTemplate from '../../../vendor/oc-client/template-renderer';
-import emptyResponseHandler from '../../../vendor/oc-empty-response-handler';
 import strings from '../../../resources';
 import settings from '../../../resources/settings';
 import type {
@@ -17,6 +15,8 @@ import { parseAcceptLanguage } from '../../../utils/accept-language';
 import BoundedCache from '../../../utils/bounded-cache';
 import errorToString from '../../../utils/error-to-string';
 import { fromPromise } from '../../../utils/universalify';
+import createRenderTemplate from '../../../vendor/oc-client/template-renderer';
+import emptyResponseHandler from '../../../vendor/oc-empty-response-handler';
 import eventsHandler from '../../domain/events-handler';
 import type { CookieOptions } from '../../domain/http-server/types';
 import NestedRenderer from '../../domain/nested-renderer';
@@ -840,7 +840,10 @@ export default function getComponent(
               try {
                 setCallbackTimeout();
                 const result = processData(contextObj, returnComponent);
-                if (result && typeof (result as Promise<unknown>).then === 'function') {
+                if (
+                  result &&
+                  typeof (result as Promise<unknown>).then === 'function'
+                ) {
                   (result as Promise<unknown>).catch(onError);
                 }
               } catch (e) {

@@ -140,6 +140,7 @@ type MaybePromise<T> = T | Promise<T>;
 export type HostRequestHook = (
   req: Request,
   ctx: HostRequestContext
+  // biome-ignore lint/suspicious/noConfusingVoidType: hooks that only inspect the request return nothing
 ) => MaybePromise<Response | void>;
 
 /**

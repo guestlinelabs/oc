@@ -163,7 +163,7 @@ describe('cli : index', () => {
         console,
         __dirname: require('node:path').join(__dirname, '../../dist/cli')
       });
-    } catch (err) {
+    } catch {
       // The facade rejection triggers process.exit asynchronously.
     } finally {
       setTimeout(() => {

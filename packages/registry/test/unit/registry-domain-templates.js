@@ -28,8 +28,7 @@ describe('registry : domain : templates', () => {
             name: 'react',
             global: 'React',
             url: 'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
-            devUrl:
-              'https://unpkg.com/react@18.3.1/umd/react.development.js'
+            devUrl: 'https://unpkg.com/react@18.3.1/umd/react.development.js'
           },
           {
             name: 'react-dom',
@@ -51,8 +50,7 @@ describe('registry : domain : templates', () => {
             name: 'react',
             global: 'React',
             url: 'https://unpkg.com/react@18.2.0/umd/react.production.min.js',
-            devUrl:
-              'https://unpkg.com/react@18.2.0/umd/react.development.js'
+            devUrl: 'https://unpkg.com/react@18.2.0/umd/react.development.js'
           },
           {
             name: 'react-dom',

@@ -2,7 +2,8 @@ const expect = require('chai').expect;
 const sinon = require('sinon');
 
 describe('registry : routes : component-static', () => {
-  const ComponentStaticRoute = require('../../dist/registry/routes/component-static').default;
+  const ComponentStaticRoute =
+    require('../../dist/registry/routes/component-static').default;
 
   const makeRes = () => {
     const jsonStub = sinon.stub();
@@ -153,8 +154,9 @@ describe('registry : routes : component-static', () => {
     });
 
     it('should pass the requested component to version lookup', () => {
-      expect(repository.getComponentVersions.calledOnceWith('actual-and-forecast'))
-        .to.be.true;
+      expect(
+        repository.getComponentVersions.calledOnceWith('actual-and-forecast')
+      ).to.be.true;
     });
   });
 

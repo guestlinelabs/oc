@@ -9,7 +9,8 @@ describe('registry : routes : helpers : get-component', () => {
   let mockedRepository;
   let GetComponent;
   const templates = {
-    'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+    'oc-template-es6': require('../../dist/registry/domain/templates')
+      .es6Template
   };
   const initialise = (params) => {
     fireStub = sinon.stub();
@@ -316,8 +317,7 @@ describe('registry : routes : helpers : get-component', () => {
       describe('when oc-client requests an unrendered component and the client supports the correct template', () => {
         const headers = {
           'user-agent': 'oc-client-0/0-0-0',
-          templates:
-            'oc-template-es6,2.0.0;oc-template-supported,1.2.3',
+          templates: 'oc-template-es6,2.0.0;oc-template-supported,1.2.3',
           accept: 'application/vnd.oc.unrendered+json'
         };
         let callBack;
@@ -392,8 +392,7 @@ describe('registry : routes : helpers : get-component', () => {
       describe('when oc-client requests an unrendered component and the client supports the correct template', () => {
         const headers = {
           'user-agent': 'oc-client-0/0-0-0',
-          templates:
-            'oc-template-es6,2.0.0;oc-template-unsupported,1.2.3',
+          templates: 'oc-template-es6,2.0.0;oc-template-unsupported,1.2.3',
           accept: 'application/vnd.oc.unrendered+json'
         };
         let callBack;

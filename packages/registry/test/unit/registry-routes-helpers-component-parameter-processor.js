@@ -208,7 +208,7 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
           if (Array.isArray(req)) return req.slice();
           const c = {};
           for (const k in req) {
-            if (Object.prototype.hasOwnProperty.call(req, k)) c[k] = req[k];
+            if (Object.hasOwn(req, k)) c[k] = req[k];
           }
           return c;
         })();
@@ -217,7 +217,7 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
           if (exp === null) return null;
           const c = {};
           for (const k in exp) {
-            if (Object.prototype.hasOwnProperty.call(exp, k)) c[k] = { ...exp[k] };
+            if (Object.hasOwn(exp, k)) c[k] = { ...exp[k] };
           }
           return c;
         })();
@@ -227,7 +227,7 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
           if (Array.isArray(req)) return req.slice();
           const c = {};
           for (const k in req) {
-            if (Object.prototype.hasOwnProperty.call(req, k)) c[k] = req[k];
+            if (Object.hasOwn(req, k)) c[k] = req[k];
           }
           return c;
         })();
@@ -236,7 +236,7 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
           if (exp === null) return null;
           const c = {};
           for (const k in exp) {
-            if (Object.prototype.hasOwnProperty.call(exp, k)) c[k] = { ...exp[k] };
+            if (Object.hasOwn(exp, k)) c[k] = { ...exp[k] };
           }
           return c;
         })();
@@ -298,7 +298,7 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
       const c1 = compileParameterSchema(undefined);
       const c2 = compileParameterSchema(null);
       const c3 = compileParameterSchema({});
-      const c4 = compileParameterSchema({} );
+      const c4 = compileParameterSchema({});
       expect(c1).to.equal(c2);
       expect(c1).to.equal(c3);
       expect(c1).to.equal(c4);
@@ -389,8 +389,12 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
       expect(r1.params).to.not.equal(r2.params);
       expect(r1.validation).to.not.equal(r2.validation);
       expect(r1.validation.errors).to.not.equal(r2.validation.errors);
-      expect(r1.validation.errors.mandatory).to.not.equal(r2.validation.errors.mandatory);
-      expect(r1.validation.errors.types).to.not.equal(r2.validation.errors.types);
+      expect(r1.validation.errors.mandatory).to.not.equal(
+        r2.validation.errors.mandatory
+      );
+      expect(r1.validation.errors.types).to.not.equal(
+        r2.validation.errors.types
+      );
       // mutating first should not affect second
       r1.params.flag = 'mutated';
       r1.validation.errors.types.extra = 'x';
@@ -435,8 +439,10 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
   });
 
   describe('compilation caching via get-component WeakMap', () => {
-    const getProcessorPath = '../../dist/registry/routes/helpers/component-parameter-processor';
-    const getComponentPath = '../../dist/registry/routes/helpers/get-component.js';
+    const getProcessorPath =
+      '../../dist/registry/routes/helpers/component-parameter-processor';
+    const getComponentPath =
+      '../../dist/registry/routes/helpers/get-component.js';
 
     it('should compile same schema object once across repeated renders', (done) => {
       const processor = require(getProcessorPath);
@@ -479,14 +485,27 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
       const mockedRepository = {
         getComponent: sinon.stub().resolves(component),
         getEnv: sinon.stub().rejects(),
-        getDataProvider: sinon.stub().resolves({ content: 'module.exports.data=function(c,cb){cb(null,{})}', filePath: '/tmp/server.js' }),
-        getCompiledView: sinon.stub().resolves('oc.components["hash"]=function(){return""}'),
+        getDataProvider: sinon.stub().resolves({
+          content: 'module.exports.data=function(c,cb){cb(null,{})}',
+          filePath: '/tmp/server.js'
+        }),
+        getCompiledView: sinon
+          .stub()
+          .resolves('oc.components["hash"]=function(){return""}'),
         getTemplatesInfo: () => [],
         getTemplate: () => ({ getCompiledTemplate: (s) => () => s }),
         getStaticFilePath: () => '//cdn/'
       };
 
-      const getComponent = GetComponent({ baseUrl: 'http://components.com/', templates: [], plugins: {}, env: {} }, mockedRepository);
+      const getComponent = GetComponent(
+        {
+          baseUrl: 'http://components.com/',
+          templates: [],
+          plugins: {},
+          env: {}
+        },
+        mockedRepository
+      );
 
       let count = 0;
       const checkDone = () => {
@@ -510,13 +529,25 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
       };
 
       getComponent(
-        { name: 'test-comp', headers: {}, parameters: {}, version: '1.0.0', conf: { baseUrl: 'http://components.com/' } },
+        {
+          name: 'test-comp',
+          headers: {},
+          parameters: {},
+          version: '1.0.0',
+          conf: { baseUrl: 'http://components.com/' }
+        },
         () => checkDone()
       );
       // second render with same schema identity
       setTimeout(() => {
         getComponent(
-          { name: 'test-comp', headers: {}, parameters: {}, version: '1.0.0', conf: { baseUrl: 'http://components.com/' } },
+          {
+            name: 'test-comp',
+            headers: {},
+            parameters: {},
+            version: '1.0.0',
+            conf: { baseUrl: 'http://components.com/' }
+          },
           () => checkDone()
         );
       }, 20);
@@ -551,7 +582,9 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
         oc: {
           container: false,
           renderInfo: false,
-          files: { template: { type: 'oc-template-es6', hashKey: 'h1', src: 't.js' } },
+          files: {
+            template: { type: 'oc-template-es6', hashKey: 'h1', src: 't.js' }
+          },
           parameters: schema1
         }
       };
@@ -561,7 +594,9 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
         oc: {
           container: false,
           renderInfo: false,
-          files: { template: { type: 'oc-template-es6', hashKey: 'h2', src: 't.js' } },
+          files: {
+            template: { type: 'oc-template-es6', hashKey: 'h2', src: 't.js' }
+          },
           parameters: schema2
         }
       };
@@ -572,14 +607,27 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
           return Promise.resolve(comp2);
         },
         getEnv: sinon.stub().rejects(),
-        getDataProvider: sinon.stub().resolves({ content: 'module.exports.data=function(c,cb){cb(null,{})}', filePath: '/tmp/server.js' }),
-        getCompiledView: sinon.stub().resolves('oc.components["h1"]=function(){return""}'),
+        getDataProvider: sinon.stub().resolves({
+          content: 'module.exports.data=function(c,cb){cb(null,{})}',
+          filePath: '/tmp/server.js'
+        }),
+        getCompiledView: sinon
+          .stub()
+          .resolves('oc.components["h1"]=function(){return""}'),
         getTemplatesInfo: () => [],
         getTemplate: () => ({ getCompiledTemplate: (s) => () => s }),
         getStaticFilePath: () => '//cdn/'
       };
 
-      const getComponent = GetComponent({ baseUrl: 'http://components.com/', templates: [], plugins: {}, env: {} }, mockedRepository);
+      const getComponent = GetComponent(
+        {
+          baseUrl: 'http://components.com/',
+          templates: [],
+          plugins: {},
+          env: {}
+        },
+        mockedRepository
+      );
 
       let doneCount = 0;
       const maybeDone = () => {
@@ -599,9 +647,27 @@ describe('registry : routes : helpers : component-parameter-processor', () => {
         }
       };
 
-      getComponent({ name: 'comp1', headers: {}, parameters: {}, version: '1.0.0', conf: { baseUrl: 'http://components.com/' } }, maybeDone);
+      getComponent(
+        {
+          name: 'comp1',
+          headers: {},
+          parameters: {},
+          version: '1.0.0',
+          conf: { baseUrl: 'http://components.com/' }
+        },
+        maybeDone
+      );
       setTimeout(() => {
-        getComponent({ name: 'comp2', headers: {}, parameters: {}, version: '1.0.0', conf: { baseUrl: 'http://components.com/' } }, maybeDone);
+        getComponent(
+          {
+            name: 'comp2',
+            headers: {},
+            parameters: {},
+            version: '1.0.0',
+            conf: { baseUrl: 'http://components.com/' }
+          },
+          maybeDone
+        );
       }, 20);
     });
   });

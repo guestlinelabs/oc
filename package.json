@@ -9,11 +9,12 @@
 		"test": "bun run build && bun run --filter '*' test",
 		"test-silent": "bun run build && bun run --filter '*' test-silent",
 		"typecheck": "bun run build && bun run --filter '*' typecheck",
-		"lint": "bunx @biomejs/biome check .",
-		"release:check": "bun run test && bun run typecheck && bun run --filter '@guestlinelabs/*' pack:dry"
+		"lint": "biome ci .",
+		"release:check": "bun run lint && bun run test && bun run typecheck && bun run --filter '@guestlinelabs/*' pack:dry",
+		"lint:fix": "biome check --write ."
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.6.4",
+		"@biomejs/biome": "2.6.8",
 		"@guestlinelabs/oc-registry": "workspace:*",
 		"@types/bun": "^1.4.4"
 	}

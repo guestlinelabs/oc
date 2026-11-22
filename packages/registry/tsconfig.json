@@ -1,7 +1,5 @@
 {
-	"include": [
-		"src"
-	],
+	"include": ["src"],
 	"exclude": [
 		"node_modules",
 		"src/components/oc-client/**",
@@ -42,9 +40,6 @@
 		"allowUnusedLabels": false,
 		"allowUnreachableCode": false,
 		"skipLibCheck": true,
-		"types": [
-			"bun",
-			"node"
-		]
+		"types": ["bun", "node"]
 	}
 }

@@ -1,6 +1,9 @@
 export type { RegistryType } from './registry';
 export { default as Registry, RegistryOptions } from './registry';
-export { OC_VERSION } from './version';
+export type {
+  Events as RegistryEvents,
+  RequestData
+} from './registry/domain/events-handler';
 
 export type {
   ConnectMiddleware,
@@ -17,10 +20,6 @@ export type {
   RegistryApp,
   UploadedFile
 } from './registry/domain/http-server/types';
-export type {
-  Events as RegistryEvents,
-  RequestData
-} from './registry/domain/events-handler';
 export type {
   Authentication,
   Author,
@@ -45,3 +44,4 @@ export type {
   TransformInfo,
   VM
 } from './types';
+export { OC_VERSION } from './version';

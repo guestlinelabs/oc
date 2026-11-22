@@ -27,8 +27,7 @@ describe('registry : routes : helpers : get-component timing', () => {
       '"use strict";module.exports.data=function(ctx,cb){cb(null,{n:1});cb(null,{n:2});};',
     tracedAsyncSuccess:
       '"use strict";module.exports.data=function(ctx,cb){console.log("provider-invoked");setTimeout(function(){cb(null,{done:true});},0);};',
-    hung:
-      '"use strict";module.exports.data=function(ctx,cb){console.log("provider-invoked");};'
+    hung: '"use strict";module.exports.data=function(ctx,cb){console.log("provider-invoked");};'
   };
 
   let GetComponent;
@@ -71,11 +70,13 @@ describe('registry : routes : helpers : get-component timing', () => {
     getDataProvider: sinon
       .stub()
       .resolves({ content: params.data, filePath: '/path/to/server.js' }),
-    getTemplatesInfo: sinon.stub().returns([
-      { type: 'oc-template-es6', version: '6.0.1', externals: [] }
-    ]),
+    getTemplatesInfo: sinon
+      .stub()
+      .returns([{ type: 'oc-template-es6', version: '6.0.1', externals: [] }]),
     getTemplate: (type) =>
-      type === 'oc-template-es6' ? require('../../dist/registry/domain/templates').es6Template : undefined,
+      type === 'oc-template-es6'
+        ? require('../../dist/registry/domain/templates').es6Template
+        : undefined,
     getStaticFilePath: sinon.stub().returns('//my-cdn.com/files/')
   });
 
@@ -150,7 +151,8 @@ describe('registry : routes : helpers : get-component timing', () => {
       getComponent(options, resolve);
     });
 
-  const render = (options) => renderVia(GetComponent(baseConf(), mockedRepository), options);
+  const render = (options) =>
+    renderVia(GetComponent(baseConf(), mockedRepository), options);
 
   const retrievedEvents = () => retrievedSpy.getCalls();
 
@@ -158,10 +160,7 @@ describe('registry : routes : helpers : get-component timing', () => {
     let callback;
     await new Promise((resolve) => {
       callback = sinon.spy(resolve);
-      GetComponent(
-        baseConf(),
-        mockedRepository
-      )(options, callback);
+      GetComponent(baseConf(), mockedRepository)(options, callback);
     });
     return callback;
   };
@@ -173,7 +172,10 @@ describe('registry : routes : helpers : get-component timing', () => {
         makeComponentParams({ data: PROVIDERS.tracedAsyncSuccess }),
         { local: true, trace }
       );
-      const getComponent = GetComponent(baseConf({ local: true }), mockedRepository);
+      const getComponent = GetComponent(
+        baseConf({ local: true }),
+        mockedRepository
+      );
 
       const completion = new Promise((resolve) => {
         getComponent(
@@ -197,7 +199,9 @@ describe('registry : routes : helpers : get-component timing', () => {
         return position;
       };
       expect(providerLogLabels).to.eql(['provider-invoked']);
-      expect(indexOf('renderer-return')).to.be.below(indexOf('provider-invoked'));
+      expect(indexOf('renderer-return')).to.be.below(
+        indexOf('provider-invoked')
+      );
       expect(indexOf('provider-invoked')).to.be.below(
         indexOf('event:component-retrieved')
       );
@@ -242,7 +246,9 @@ describe('registry : routes : helpers : get-component timing', () => {
     });
 
     it('invokes the provider only after env resolution completes', async () => {
-      initialise(makeComponentParams({ data: PROVIDERS.syncSuccess, env: true }));
+      initialise(
+        makeComponentParams({ data: PROVIDERS.syncSuccess, env: true })
+      );
 
       const result = await render(baseOptions());
 
@@ -348,11 +354,7 @@ describe('registry : routes : helpers : get-component timing', () => {
           );
         });
 
-        for (
-          let i = 0;
-          i < 100 && clock.countTimers() === 0;
-          i++
-        ) {
+        for (let i = 0; i < 100 && clock.countTimers() === 0; i++) {
           await Promise.resolve();
         }
         expect(
@@ -383,10 +385,7 @@ describe('registry : routes : helpers : get-component timing', () => {
 
       await new Promise((resolve) => {
         callback = sinon.spy(resolve);
-        GetComponent(
-          baseConf(),
-          mockedRepository
-        )(
+        GetComponent(baseConf(), mockedRepository)(
           baseOptions({
             headers: { 'accept-language': 'en-GB' },
             parameters: { a: '1' },
@@ -457,12 +456,13 @@ describe('registry : routes : helpers : get-component timing', () => {
 
   describe('local diagnostics invariants', () => {
     it('finishes stack enrichment before the retrieval event and the public callback', async () => {
-      initialise(
-        makeComponentParams({ data: PROVIDERS.syncErrorCallback }),
-        { local: true }
-      );
+      initialise(makeComponentParams({ data: PROVIDERS.syncErrorCallback }), {
+        local: true
+      });
 
-      const result = await render(baseOptions({ conf: baseConf({ local: true }) }));
+      const result = await render(
+        baseOptions({ conf: baseConf({ local: true }) })
+      );
 
       expect(result.status).to.equal(500);
       expect(mockedRepository.getDataProvider.callCount).to.equal(2);
@@ -471,10 +471,9 @@ describe('registry : routes : helpers : get-component timing', () => {
     });
 
     it('falls back to the original stack when enrichment fails', async () => {
-      initialise(
-        makeComponentParams({ data: PROVIDERS.syncErrorCallback }),
-        { local: true }
-      );
+      initialise(makeComponentParams({ data: PROVIDERS.syncErrorCallback }), {
+        local: true
+      });
       mockedRepository.getDataProvider = sinon
         .stub()
         .onFirstCall()
@@ -488,10 +487,10 @@ describe('registry : routes : helpers : get-component timing', () => {
       let callback;
       await new Promise((resolve) => {
         callback = sinon.spy(resolve);
-        GetComponent(
-          baseConf({ local: true }),
-          mockedRepository
-        )(baseOptions({ conf: baseConf({ local: true }) }), callback);
+        GetComponent(baseConf({ local: true }), mockedRepository)(
+          baseOptions({ conf: baseConf({ local: true }) }),
+          callback
+        );
       });
 
       expect(callback.callCount).to.equal(1);

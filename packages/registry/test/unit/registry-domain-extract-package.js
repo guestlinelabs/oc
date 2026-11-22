@@ -34,14 +34,12 @@ describe('registry : domain : extract-package', () => {
 
       decompressStub.resolves();
 
-      extractPackage(
-        [
-          {
-            filename: '1478279453422.tar.gz',
-            path: '/some-path/registry/temp/1478279453422.tar.gz'
-          }
-        ]
-      )
+      extractPackage([
+        {
+          filename: '1478279453422.tar.gz',
+          path: '/some-path/registry/temp/1478279453422.tar.gz'
+        }
+      ])
         .then((res) => {
           response = res;
         })
@@ -82,14 +80,12 @@ describe('registry : domain : extract-package', () => {
 
       decompressStub.callsFake(() => Promise.reject('error!'));
 
-      extractPackage(
-        [
-          {
-            filename: '1478279453422.tar.gz',
-            path: '/some-path/registry/temp/1478279453422.tar.gz'
-          }
-        ]
-      )
+      extractPackage([
+        {
+          filename: '1478279453422.tar.gz',
+          path: '/some-path/registry/temp/1478279453422.tar.gz'
+        }
+      ])
         .catch((err) => {
           error = err;
         })

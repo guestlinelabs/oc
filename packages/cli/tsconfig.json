@@ -1,20 +1,12 @@
 {
-	"include": [
-		"src"
-	],
-	"exclude": [
-		"node_modules"
-	],
+	"include": ["src"],
+	"exclude": ["node_modules"],
 	"compilerOptions": {
 		"target": "ES2022",
 		"module": "commonjs",
 		"paths": {
-			"@guestlinelabs/oc-registry": [
-				"../registry/dist/index"
-			],
-			"@guestlinelabs/oc-registry/*": [
-				"../registry/dist/*"
-			]
+			"@guestlinelabs/oc-registry": ["../registry/dist/index"],
+			"@guestlinelabs/oc-registry/*": ["../registry/dist/*"]
 		},
 		"allowJs": true,
 		"checkJs": true,
@@ -41,9 +33,6 @@
 		"allowUnusedLabels": false,
 		"allowUnreachableCode": false,
 		"skipLibCheck": true,
-		"types": [
-			"bun",
-			"node"
-		]
+		"types": ["bun", "node"]
 	}
 }

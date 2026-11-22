@@ -19,29 +19,34 @@ const makeResponse = (conf, resolve) => ({
 describe('registry : router : artifact cache', () => {
   it('shares cold artifact loads between GET and batch routes', async () => {
     const fixture = mockedComponents['env-component'];
-    const es6Template = require('../../dist/registry/domain/templates').es6Template;
+    const es6Template =
+      require('../../dist/registry/domain/templates').es6Template;
     const repository = {
       getCompiledView: sinon.stub().callsFake(() => waitFor(fixture.view)),
       getComponent: sinon.stub().resolves(fixture.package),
       getEnv: sinon.stub().callsFake(() => waitFor({ secret: 'secretvalue' })),
-      getDataProvider: sinon.stub().callsFake(() =>
-        waitFor({ content: fixture.data, filePath: '/path/to/server.js' })
-      ),
+      getDataProvider: sinon
+        .stub()
+        .callsFake(() =>
+          waitFor({ content: fixture.data, filePath: '/path/to/server.js' })
+        ),
       getTemplatesInfo: sinon
         .stub()
-        .returns([{ type: 'oc-template-es6', version: '7.0.6', externals: [] }]),
-      getTemplate: sinon.stub().callsFake((type) =>
-        type === 'oc-template-es6' ? es6Template : undefined
-      ),
+        .returns([
+          { type: 'oc-template-es6', version: '7.0.6', externals: [] }
+        ]),
+      getTemplate: sinon
+        .stub()
+        .callsFake((type) =>
+          type === 'oc-template-es6' ? es6Template : undefined
+        ),
       getStaticFilePath: sinon.stub().returns('//cdn.invalid/files/')
     };
     const handlers = new Map();
     const adapter = {
-      route: sinon
-        .stub()
-        .callsFake((_method, _path, id, routeHandlers) => {
-          handlers.set(id, routeHandlers.at(-1));
-        }),
+      route: sinon.stub().callsFake((_method, _path, id, routeHandlers) => {
+        handlers.set(id, routeHandlers.at(-1));
+      }),
       fromConnect: sinon.stub().callsFake((handler) => handler)
     };
     const conf = {
