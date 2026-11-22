@@ -42,7 +42,9 @@ bun run release 1.2.0        # an explicit version
 bun run release patch --dry-run
 ```
 
-The script ([scripts/release.ts](scripts/release.ts)):
+The script ([scripts/release.ts](scripts/release.ts)) first prints each
+package's current and new version, the npm dist-tag and the git steps, and asks
+you to confirm (`--yes` skips the prompt). Then it:
 
 1. runs `release:check` (lint, tests, type-check, dry-run pack);
 2. sets the new version in every package and `bun.lock`, commits

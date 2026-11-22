@@ -12,7 +12,9 @@
  *   --preid <id>   prerelease identifier when starting one (default: alpha)
  *   --otp <code>   npm one-time password, passed to `bun publish`
  *   --dry-run      show what would happen; no files, commits, tags or uploads
+ *   --yes, -y      skip the confirmation prompt
  *
+ * It first prints each package's current -> new version and asks to confirm.
  * Steps: run `release:check`, bump every package.json + bun.lock, commit
  * "Release vX", tag vX, `bun publish --recursive` (dependency order, skips
  * versions already on npm, dist-tag = prerelease id or "latest"), then push
@@ -100,6 +102,23 @@ async function isOnNpm(name: string, version: string): Promise<boolean> {
   );
 }
 
+/** The version a dist-tag currently points to on npm, if any. */
+async function npmDistTag(
+  name: string,
+  tag: string
+): Promise<string | undefined> {
+  const res = await fetch(
+    `https://registry.npmjs.org/${name.replace('/', '%2f')}`,
+    { headers: { accept: 'application/vnd.npm.install-v1+json' } }
+  );
+  if (res.status === 404) return undefined;
+  if (!res.ok) {
+    throw new Error(`Could not read ${name} from npm: HTTP ${res.status}`);
+  }
+  const doc = (await res.json()) as { 'dist-tags'?: Record<string, string> };
+  return doc['dist-tags']?.[tag];
+}
+
 async function writeVersion(version: string): Promise<void> {
   for (const dir of PACKAGES) {
     const file = `${dir}/package.json`;
@@ -118,6 +137,7 @@ async function main(): Promise<void> {
     options: {
       preid: { type: 'string', default: 'alpha' },
       otp: { type: 'string' },
+      yes: { type: 'boolean', short: 'y', default: false },
       'dry-run': { type: 'boolean', default: false }
     }
   });
@@ -147,9 +167,33 @@ async function main(): Promise<void> {
     throw new Error(`${target} is already on npm for some packages.`);
   }
 
-  console.log(
-    `Releasing ${target} (npm dist-tag "${tag}")${dryRun ? ' [dry run]' : ''}`
+  const onNpm = await Promise.all(
+    packages.map((pkg) => npmDistTag(pkg.name, tag))
   );
+  const width = Math.max(...packages.map((pkg) => pkg.name.length));
+  console.log(
+    `\nRelease plan (npm dist-tag "${tag}")${dryRun ? ' [dry run]' : ''}:\n`
+  );
+  packages.forEach((pkg, i) => {
+    const change = published[i]
+      ? `${target} (already on npm, skipped)`
+      : pkg.version === target
+        ? `${target} (no version change)`
+        : `${pkg.version} -> ${target}`;
+    console.log(
+      `  ${pkg.name.padEnd(width)}  ${change}   npm "${tag}" now: ${onNpm[i] ?? 'unpublished'}`
+    );
+  });
+  console.log(
+    target === current
+      ? `\n  git: tag ${gitTag} (if missing) and push to origin/main\n`
+      : `\n  git: commit "Release ${gitTag}", tag ${gitTag}, push to origin/main\n`
+  );
+
+  if (!dryRun && !values.yes && !confirm('Continue?')) {
+    console.log('Cancelled.');
+    return;
+  }
 
   if (!dryRun) {
     if (await git('status', '--porcelain')) {
