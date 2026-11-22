@@ -1,0 +1,440 @@
+const expect = require('chai').expect;
+const sinon = require('sinon');
+const settings = require('../../dist/resources/settings').default;
+
+describe('registry : routes : components', () => {
+  const ComponentsRoute =
+    require('../../dist/registry/routes/components').default;
+  const mockedComponents = require('../fixtures/mocked-components');
+
+  let mockedRepository;
+  let componentsRoute;
+  let code;
+  let response;
+  const templates = {
+    'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+  };
+
+  const initialise = (params) => {
+    mockedRepository = {
+      getCompiledView: sinon.stub().resolves(params.view),
+      getComponent: sinon.stub().resolves(params.package),
+      getDataProvider: sinon
+        .stub()
+        .resolves({ content: params.data, filePath: '' }),
+      getTemplatesInfo: sinon.stub().returns([
+        {
+          type: 'oc-template-es6',
+          version: '6.0.1',
+          externals: []
+        },
+        {
+          type: 'oc-template-es6',
+          version: '6.0.2',
+          externals: []
+        }
+      ]),
+      getTemplate: (type) => templates[type],
+      getStaticFilePath: sinon.stub().returns('//my-cdn.com/files/')
+    };
+  };
+
+  const makeRequest = (body, headersOrCallback, cb) => {
+    let callback = cb;
+    let headers = headersOrCallback;
+
+    if (typeof headersOrCallback === 'function') {
+      callback = headersOrCallback;
+      headers = {};
+    }
+
+    componentsRoute(
+      { headers, body },
+      {
+        conf: { baseUrl: 'http://components.com/' },
+        status: (jsonCode) => {
+          code = jsonCode;
+          return {
+            json: (jsonResponse) => {
+              response = jsonResponse;
+              callback();
+            }
+          };
+        }
+      }
+    );
+  };
+
+  const makeInfoRequest = (body, cb) => {
+    componentsRoute(
+      { headers: { accept: 'application/vnd.oc.info+json' }, body: body },
+      {
+        conf: { baseUrl: 'http://components.com/' },
+        status: (jsonCode) => {
+          code = jsonCode;
+          return {
+            json: (jsonResponse) => {
+              response = jsonResponse;
+              cb();
+            }
+          };
+        }
+      }
+    );
+  };
+
+  describe('when making valid request for two components', () => {
+    before((done) => {
+      initialise(mockedComponents['async-error2-component']);
+      componentsRoute = ComponentsRoute({}, mockedRepository);
+
+      makeRequest(
+        {
+          components: [
+            {
+              name: 'async-error2-component',
+              version: '1.X.X',
+              parameters: { error: true }
+            },
+            {
+              name: 'async-error2-component',
+              version: '1.0.0'
+            }
+          ]
+        },
+        done
+      );
+    });
+
+    it('should return 200 status code', () => {
+      expect(code).to.be.equal(200);
+    });
+
+    it('should return a response containing both components', () => {
+      expect(response.length).to.be.equal(2);
+    });
+
+    it('should return a response containing components in the correct order', () => {
+      expect(response[0].response.href).to.be.undefined;
+      expect(response[1].response.href).to.be.equal(
+        'http://components.com/async-error2-component/1.0.0'
+      );
+    });
+
+    it('should return a response with error code and description for the first component', () => {
+      expect(response[0].response.code).to.be.equal('GENERIC_ERROR');
+      expect(response[0].response.error).to.be.equal(
+        'Component execution error: thisDoesnotExist is not defined'
+      );
+    });
+
+    it('should return a response with rendered html for second component', () => {
+      expect(response[1].response.html).to.be.equal('<div>hello</div>');
+    });
+
+    it('should include 500 status code for first component', () => {
+      expect(response[0].status).to.equal(500);
+    });
+
+    it('should include 200 status code for second component', () => {
+      expect(response[1].status).to.equal(200);
+    });
+
+    it('should return name and request version for both components', () => {
+      expect(response[0].response.name).to.be.equal('async-error2-component');
+      expect(response[0].response.requestVersion).to.be.equal('1.X.X');
+      expect(response[1].response.name).to.be.equal('async-error2-component');
+      expect(response[1].response.requestVersion).to.be.equal('1.0.0');
+    });
+  });
+
+  describe('when making request for 0 components', () => {
+    before((done) => {
+      makeRequest({ components: [] }, done);
+    });
+
+    it('should return 200 status code', () => {
+      expect(code).to.be.equal(200);
+    });
+
+    it('should return a response containing empty array', () => {
+      expect(response).to.be.eql([]);
+    });
+  });
+
+  describe('when making valid info request for two components', () => {
+    before((done) => {
+      initialise(mockedComponents['async-error2-component']);
+      componentsRoute = ComponentsRoute({}, mockedRepository);
+
+      makeInfoRequest(
+        {
+          components: [
+            {
+              name: 'async-error2-component',
+              version: '1.X.X'
+            },
+            {
+              name: 'async-error2-component',
+              version: '1.0.0'
+            }
+          ]
+        },
+        done
+      );
+    });
+
+    it('should return 200 status code', () => {
+      expect(code).to.be.equal(200);
+    });
+
+    it('should return a response containing both components', () => {
+      expect(response.length).to.be.equal(2);
+    });
+
+    const expectedResponse = [
+      {
+        status: 200,
+        response: {
+          name: 'async-error2-component',
+          type: 'oc-component',
+          requestVersion: '1.X.X',
+          version: '1.0.0'
+        }
+      },
+      {
+        status: 200,
+        response: {
+          name: 'async-error2-component',
+          type: 'oc-component',
+          requestVersion: '1.0.0',
+          version: '1.0.0'
+        }
+      }
+    ];
+
+    it('should return a response containing components in the correct order', () => {
+      expect(response).to.be.eql(expectedResponse);
+    });
+  });
+
+  describe('when making info request for 0 components', () => {
+    before((done) => {
+      makeInfoRequest({ components: [] }, done);
+    });
+
+    it('should return 200 status code', () => {
+      expect(code).to.be.equal(200);
+    });
+
+    it('should return a response containing empty array', () => {
+      expect(response).to.be.eql([]);
+    });
+  });
+
+  describe('when making not valid request', () => {
+    describe('when not providing components property', () => {
+      before((done) => {
+        makeRequest({}, done);
+      });
+
+      it('should return 400 status code', () => {
+        expect(code).to.be.equal(400);
+      });
+
+      it('should return error details', () => {
+        expect(response.code).to.be.equal('POST_BODY_NOT_VALID');
+        expect(response.error).to.be.equal(
+          'The request body is malformed: components property is missing'
+        );
+      });
+    });
+
+    describe('when components property is not an array', () => {
+      before((done) => {
+        makeRequest({ components: {} }, done);
+      });
+
+      it('should return 400 status code', () => {
+        expect(code).to.be.equal(400);
+      });
+
+      it('should return error details', () => {
+        expect(response.code).to.be.equal('POST_BODY_NOT_VALID');
+        expect(response.error).to.be.equal(
+          'The request body is malformed: components property is not an array'
+        );
+      });
+    });
+
+    describe('when component does not have name property', () => {
+      before((done) => {
+        makeRequest(
+          {
+            components: [
+              {
+                version: '1.0.0',
+                namse: 'whazaa'
+              }
+            ]
+          },
+          done
+        );
+      });
+
+      it('should return 400 status code', () => {
+        expect(code).to.be.equal(400);
+      });
+
+      it('should return error details', () => {
+        expect(response.code).to.be.equal('POST_BODY_NOT_VALID');
+        expect(response.error).to.be.equal(
+          'The request body is malformed: component 0 must have name property'
+        );
+      });
+    });
+
+    describe('when components do not have name property', () => {
+      before((done) => {
+        makeRequest(
+          {
+            components: [
+              {
+                version: '1.0.0',
+                namse: 'whazaa'
+              },
+              {
+                version: '1.X.0',
+                nae: 'mispelled'
+              }
+            ]
+          },
+          done
+        );
+      });
+
+      it('should return 400 status code', () => {
+        expect(code).to.be.equal(400);
+      });
+
+      it('should return error details', () => {
+        expect(response.code).to.be.equal('POST_BODY_NOT_VALID');
+        expect(response.error).to.be.equal(
+          'The request body is malformed: component 0 must have name property, component 1 must have name property'
+        );
+      });
+    });
+  });
+
+  describe('when getting a component that has custom parameters', () => {
+    before((done) => {
+      initialise(mockedComponents['required-parameter-component']);
+      componentsRoute = ComponentsRoute({}, mockedRepository);
+
+      makeRequest(
+        {
+          components: [
+            {
+              name: 'required-parameter-component',
+              version: '1.X.X',
+              parameters: { userId: 'USERID' }
+            }
+          ]
+        },
+        done
+      );
+    });
+
+    const expectedResponse = [
+      {
+        status: 200,
+        response: {
+          name: 'required-parameter-component',
+          type: 'oc-component',
+          requestVersion: '1.X.X',
+          version: '1.0.0'
+        }
+      }
+    ];
+
+    it('should return a 200 response', () => {
+      expect(response[0].response).to.include(expectedResponse[0].response);
+    });
+  });
+
+  describe('when getting a component that has missing required parameters', () => {
+    before((done) => {
+      initialise(mockedComponents['required-parameter-component']);
+      componentsRoute = ComponentsRoute({}, mockedRepository);
+
+      makeRequest(
+        {
+          components: [
+            {
+              name: 'required-parameter-component',
+              version: '1.X.X'
+            }
+          ]
+        },
+        done
+      );
+    });
+
+    const expectedResponse = [
+      {
+        status: 400,
+        response: {
+          name: 'required-parameter-component',
+          code: 'NOT_VALID_REQUEST',
+          error: 'Expected mandatory parameters are missing: userId',
+          requestVersion: '1.X.X'
+        }
+      }
+    ];
+
+    it('should return 400 status code', () => {
+      expect(response).to.be.eql(expectedResponse);
+    });
+  });
+
+  describe('when making valid info request for a component action', () => {
+    before((done) => {
+      initialise(mockedComponents['required-parameter-component']);
+      componentsRoute = ComponentsRoute({}, mockedRepository);
+
+      makeRequest(
+        {
+          components: [
+            {
+              action: 'someAction',
+              name: 'required-parameter-component',
+              version: '1.X.X'
+            }
+          ]
+        },
+        {
+          accept: settings.registry.acceptUnrenderedHeader
+        },
+        done
+      );
+    });
+
+    const expectedResponse = [
+      {
+        status: 200,
+        response: {
+          href: 'http://components.com/required-parameter-component/1.X.X',
+          name: 'required-parameter-component',
+          type: 'oc-component',
+          requestVersion: '1.X.X',
+          version: '1.0.0',
+          renderMode: 'unrendered'
+        }
+      }
+    ];
+
+    it('should return a 200 response', () => {
+      expect(response[0].response).to.include(expectedResponse[0].response);
+    });
+  });
+});

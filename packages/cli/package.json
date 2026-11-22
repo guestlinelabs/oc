@@ -1,0 +1,62 @@
+{
+	"name": "@guestlinelabs/oc",
+	"version": "1.0.0-alpha.0",
+	"description": "OpenComponents authoring CLI (Bun fork)",
+	"keywords": [
+		"opencomponents",
+		"oc",
+		"micro-frontends",
+		"cli",
+		"bun"
+	],
+	"homepage": "https://github.com/guestlinelabs/oc/tree/main/packages/cli#readme",
+	"bugs": {
+		"url": "https://github.com/guestlinelabs/oc/issues"
+	},
+	"type": "commonjs",
+	"bin": {
+		"oc": "./dist/oc-cli.js"
+	},
+	"files": [
+		"dist",
+		"LICENSE",
+		"README.md"
+	],
+	"scripts": {
+		"build": "rm -rf dist && tsc -p tsconfig.json && chmod +x dist/oc-cli.js",
+		"test": "bun tasks/mochaTest.js",
+		"test-silent": "bun tasks/mochaTest.js --silent",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"lint": "bunx @biomejs/biome check src test tasks",
+		"prepublishOnly": "cd ../.. && bun run build",
+		"pack:dry": "bun pm pack --dry-run"
+	},
+	"engines": {
+		"bun": ">=1.4.3"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/guestlinelabs/oc.git",
+		"directory": "packages/cli"
+	},
+	"devDependencies": {
+		"@guestlinelabs/oc-vite": "workspace:*",
+		"@types/bun": "^1.4.4",
+		"@types/node": "^25.9.9",
+		"bun-types": "^1.4.5",
+		"chai": "^6.3.0",
+		"injectr": "^0.5.1",
+		"mocha": "^11.8.0",
+		"sinon": "^21.0.0",
+		"typescript": "^6.0.3",
+		"vite": "^8.0.0"
+	},
+	"dependencies": {
+		"@guestlinelabs/oc-registry": "workspace:*"
+	},
+	"publishConfig": {
+		"access": "public",
+		"tag": "alpha"
+	}
+}

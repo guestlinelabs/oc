@@ -1,0 +1,19 @@
+{
+	"name": "hello-world",
+	"description": "Minimal ESM OpenComponent used by the CLI test suite",
+	"version": "1.0.0",
+	"type": "module",
+	"repository": "",
+	"oc": {
+		"files": {
+			"template": {
+				"src": "template.js",
+				"type": "oc-template-esm"
+			}
+		}
+	},
+	"devDependencies": {
+		"@guestlinelabs/oc-vite": "workspace:*",
+		"vite": "^8.0.0"
+	}
+}

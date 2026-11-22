@@ -1,0 +1,29 @@
+{
+	"name": "welcome",
+	"description": "",
+	"version": "1.0.0",
+	"repository": "",
+	"oc": {
+		"container": false,
+		"renderInfo": false,
+		"files": {
+			"dataProvider": {
+				"type": "node.js",
+				"hashKey": "9a576f7affbf6e0d7cd578d65889106a4a4630e8",
+				"src": "server.js",
+				"size": 178
+			},
+			"template": {
+				"type": "oc-template-es6",
+				"hashKey": "77381ed5b2a8d23a446bc823de3e3c4c99aedbd3",
+				"src": "template.js",
+				"version": "2.0.0",
+				"size": 399
+			},
+			"static": []
+		},
+		"version": "0.50.67",
+		"packaged": true,
+		"date": 1462464333369
+	}
+}

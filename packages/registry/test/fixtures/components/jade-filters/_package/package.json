@@ -1,0 +1,27 @@
+{
+	"name": "jade-filters",
+	"description": "",
+	"version": "1.0.0",
+	"repository": "",
+	"oc": {
+		"files": {
+			"dataProvider": {
+				"type": "node.js",
+				"hashKey": "f394c5a8f0273c87718367c0708cf0bba783941b",
+				"src": "server.js",
+				"size": 77
+			},
+			"template": {
+				"type": "oc-template-es6",
+				"hashKey": "de714a1f58b7bb0de9d52ba03568f7dc462289f4",
+				"src": "template.js",
+				"version": "2.0.0",
+				"size": 142
+			},
+			"static": []
+		},
+		"version": "0.50.67",
+		"packaged": true,
+		"date": 1462464333369
+	}
+}

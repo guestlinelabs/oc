@@ -1,0 +1,123 @@
+{
+	"name": "@guestlinelabs/oc-registry",
+	"version": "1.0.0-alpha.0",
+	"description": "OpenComponents registry server (Bun fork)",
+	"keywords": [
+		"opencomponents",
+		"oc",
+		"micro-frontends",
+		"registry",
+		"bun"
+	],
+	"homepage": "https://github.com/guestlinelabs/oc/tree/main/packages/registry#readme",
+	"bugs": {
+		"url": "https://github.com/guestlinelabs/oc/issues"
+	},
+	"type": "commonjs",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./azure": {
+			"types": "./dist/azure/index.d.ts",
+			"default": "./dist/azure/index.js"
+		},
+		"./testing": {
+			"types": "./dist/testing/index.d.ts",
+			"default": "./dist/testing/index.js"
+		},
+		"./types": {
+			"types": "./dist/types.d.ts",
+			"default": "./dist/types.js"
+		},
+		"./version": {
+			"types": "./dist/version.d.ts",
+			"default": "./dist/version.js"
+		},
+		"./resources": {
+			"types": "./dist/resources/index.d.ts",
+			"default": "./dist/resources/index.js"
+		},
+		"./resources/*": {
+			"types": "./dist/resources/*.d.ts",
+			"default": "./dist/resources/*.js"
+		},
+		"./utils/*": {
+			"types": "./dist/utils/*.d.ts",
+			"default": "./dist/utils/*.js"
+		},
+		"./registry/domain/validators": {
+			"types": "./dist/registry/domain/validators/index.d.ts",
+			"default": "./dist/registry/domain/validators/index.js"
+		},
+		"./registry/domain/url-builder": {
+			"types": "./dist/registry/domain/url-builder.d.ts",
+			"default": "./dist/registry/domain/url-builder.js"
+		},
+		"./dist/*": {
+			"types": "./dist/*.d.ts",
+			"default": "./dist/*.js"
+		}
+	},
+	"files": [
+		"dist",
+		"LICENSE",
+		"README.md"
+	],
+	"scripts": {
+		"build": "rm -rf dist && tsc -p tsconfig.json && bun tasks/build.js",
+		"test": "bun tasks/mochaTest.js",
+		"test-silent": "bun tasks/mochaTest.js --silent",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"lint": "bunx @biomejs/biome check src test tasks",
+		"prepublishOnly": "cd ../.. && bun run build",
+		"pack:dry": "bun pm pack --dry-run"
+	},
+	"engines": {
+		"bun": ">=1.4.3"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/guestlinelabs/oc.git",
+		"directory": "packages/registry"
+	},
+	"devDependencies": {
+		"@azure/identity": "^4.2.1",
+		"@azure/storage-blob": "^12.24.0",
+		"@kitajs/html": "^4.2.13",
+		"@kitajs/ts-html-plugin": "^4.1.4",
+		"@rdevis/turbo-stream": "^2.4.1",
+		"@types/bun": "^1.4.4",
+		"@types/node": "^25.9.9",
+		"bun-types": "^1.4.5",
+		"chai": "^6.3.0",
+		"injectr": "^0.5.1",
+		"lodash.isequal": "^4.5.0",
+		"mocha": "^11.8.0",
+		"oc-client-browser": "^2.1.13",
+		"sinon": "^21.0.0",
+		"type-fest": "^2.19.0",
+		"typescript": "^6.0.3"
+	},
+	"dependencies": {},
+	"peerDependencies": {
+		"@azure/identity": "^4",
+		"@azure/storage-blob": ">=12.17.0 <13"
+	},
+	"peerDependenciesMeta": {
+		"@azure/identity": {
+			"optional": true
+		},
+		"@azure/storage-blob": {
+			"optional": true
+		}
+	},
+	"publishConfig": {
+		"access": "public",
+		"tag": "alpha"
+	}
+}

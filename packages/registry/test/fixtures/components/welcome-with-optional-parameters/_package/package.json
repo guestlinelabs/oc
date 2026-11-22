@@ -1,0 +1,47 @@
+{
+	"name": "welcome-with-optional-parameters",
+	"description": "",
+	"version": "1.0.0",
+	"repository": "",
+	"oc": {
+		"container": false,
+		"renderInfo": false,
+		"parameters": {
+			"firstName": {
+				"type": "string",
+				"mandatory": true,
+				"example": "John"
+			},
+			"lastName": {
+				"type": "string",
+				"mandatory": false,
+				"example": "Smith"
+			},
+			"nick": {
+				"type": "string",
+				"mandatory": false,
+				"example": "Smith",
+				"default": "Johnny"
+			}
+		},
+		"files": {
+			"dataProvider": {
+				"type": "node.js",
+				"hashKey": "7b434dc8e20d685db0a7c500792bb7317eb41e61",
+				"src": "server.js",
+				"size": 190
+			},
+			"template": {
+				"type": "oc-template-es6",
+				"hashKey": "5eda5aa14527cd5988f1c999bab8ba4fd520da8e",
+				"src": "template.js",
+				"version": "2.0.0",
+				"size": 439
+			},
+			"static": []
+		},
+		"version": "0.50.67",
+		"packaged": true,
+		"date": 1462464333369
+	}
+}

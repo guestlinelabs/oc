@@ -1,0 +1,9 @@
+{
+	"name": "no-containers",
+	"version": "1.0.0",
+	"oc": {
+		"files": {
+			"template": { "src": "template.js", "type": "oc-template-es6" }
+		}
+	}
+}

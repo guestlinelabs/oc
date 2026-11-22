@@ -1,0 +1,79 @@
+{
+	"name": "@guestlinelabs/oc-vite",
+	"version": "1.0.0-alpha.0",
+	"description": "OpenComponents Vite plugin and runtime (Bun fork)",
+	"keywords": [
+		"opencomponents",
+		"oc",
+		"micro-frontends",
+		"vite",
+		"vite-plugin",
+		"bun"
+	],
+	"homepage": "https://github.com/guestlinelabs/oc/tree/main/packages/vite#readme",
+	"bugs": {
+		"url": "https://github.com/guestlinelabs/oc/issues"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./client": {
+			"types": "./types/client.d.ts",
+			"default": "./dist/client.js"
+		},
+		"./renderer": {
+			"types": "./dist/renderer.d.ts",
+			"default": "./dist/renderer.js"
+		},
+		"./plugin": {
+			"types": "./dist/vite/index.d.ts",
+			"default": "./dist/vite/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"types",
+		"LICENSE",
+		"README.md"
+	],
+	"scripts": {
+		"build": "rm -rf dist && tsc -p tsconfig.json && cp src/client-ambient.d.ts dist/client-ambient.d.ts",
+		"test": "bun test",
+		"test-silent": "bun test",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"lint": "bunx @biomejs/biome check src test",
+		"prepublishOnly": "cd ../.. && bun run build",
+		"pack:dry": "bun pm pack --dry-run"
+	},
+	"engines": {
+		"bun": ">=1.4.3"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/guestlinelabs/oc.git",
+		"directory": "packages/vite"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.4",
+		"@types/node": "^25.9.9",
+		"bun-types": "^1.4.5",
+		"typescript": "^6.0.3",
+		"vite": "^8.0.0"
+	},
+	"dependencies": {
+		"@guestlinelabs/oc-registry": "workspace:*"
+	},
+	"peerDependencies": {
+		"vite": "^6.0.0 || ^7.0.0 || ^8.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"tag": "alpha"
+	}
+}

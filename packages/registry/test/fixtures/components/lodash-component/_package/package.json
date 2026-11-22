@@ -1,0 +1,32 @@
+{
+	"name": "lodash-component",
+	"description": "",
+	"version": "1.0.0",
+	"repository": "",
+	"dependencies": {
+		"lodash.isequal": ""
+	},
+	"oc": {
+		"container": false,
+		"renderInfo": false,
+		"files": {
+			"dataProvider": {
+				"type": "node.js",
+				"hashKey": "88398d565a5e062893c44fee15bab24aff3e6302",
+				"src": "server.js",
+				"size": 161
+			},
+			"template": {
+				"type": "oc-template-es6",
+				"hashKey": "9faada0ebe9b28efc87bf0aaa946173a9b9543e0",
+				"src": "template.js",
+				"version": "2.0.0",
+				"size": 370
+			},
+			"static": []
+		},
+		"version": "0.50.67",
+		"packaged": true,
+		"date": 1462464333369
+	}
+}

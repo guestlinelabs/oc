@@ -1,0 +1,49 @@
+{
+	"include": [
+		"src"
+	],
+	"exclude": [
+		"node_modules"
+	],
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "commonjs",
+		"paths": {
+			"@guestlinelabs/oc-registry": [
+				"../registry/dist/index"
+			],
+			"@guestlinelabs/oc-registry/*": [
+				"../registry/dist/*"
+			]
+		},
+		"allowJs": true,
+		"checkJs": true,
+		"declaration": true,
+		"rootDir": "./src",
+		"outDir": "./dist",
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"strict": true,
+		"noImplicitAny": true,
+		"strictNullChecks": true,
+		"strictFunctionTypes": true,
+		"strictBindCallApply": true,
+		"strictPropertyInitialization": true,
+		"noImplicitThis": true,
+		"useUnknownInCatchVariables": true,
+		"alwaysStrict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"noImplicitOverride": true,
+		"noPropertyAccessFromIndexSignature": true,
+		"allowUnusedLabels": false,
+		"allowUnreachableCode": false,
+		"skipLibCheck": true,
+		"types": [
+			"bun",
+			"node"
+		]
+	}
+}

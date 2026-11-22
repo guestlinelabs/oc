@@ -1,0 +1,29 @@
+{
+	"name": "container-with-nested",
+	"description": "",
+	"version": "1.0.0",
+	"repository": "",
+	"oc": {
+		"container": false,
+		"renderInfo": false,
+		"files": {
+			"dataProvider": {
+				"type": "node.js",
+				"hashKey": "1df7da76bf60fc07bceb48649c8797140c8677b2",
+				"src": "server.js",
+				"size": 163
+			},
+			"template": {
+				"type": "oc-template-es6",
+				"hashKey": "5416e95c1f67da634412c5eab76feb517f29baa4",
+				"src": "template.js",
+				"version": "2.0.0",
+				"size": 206
+			},
+			"static": []
+		},
+		"version": "0.50.67",
+		"packaged": true,
+		"date": 1462464333369
+	}
+}

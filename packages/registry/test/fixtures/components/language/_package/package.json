@@ -1,0 +1,29 @@
+{
+	"name": "language",
+	"description": "",
+	"version": "1.0.0",
+	"repository": "",
+	"oc": {
+		"container": false,
+		"renderInfo": false,
+		"files": {
+			"dataProvider": {
+				"type": "node.js",
+				"hashKey": "0dfc56eed1bb1020c9495965107d713a83ae8bcd",
+				"src": "server.js",
+				"size": 338
+			},
+			"template": {
+				"type": "oc-template-es6",
+				"hashKey": "7e1af57c97cbccc333e770151bdd3305a0658aa9",
+				"src": "template.js",
+				"version": "2.0.0",
+				"size": 364
+			},
+			"static": []
+		},
+		"version": "0.50.67",
+		"packaged": true,
+		"date": 1462464333369
+	}
+}

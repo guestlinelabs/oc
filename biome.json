@@ -1,0 +1,95 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+	"vcs": {
+		"enabled": false,
+		"clientKind": "git",
+		"useIgnoreFile": false
+	},
+	"files": {
+		"ignoreUnknown": false,
+		"includes": [
+			"packages/**/*",
+			"!packages/*/dist/**/*",
+			"!packages/*/node_modules/**/*",
+			"!packages/registry/src/components/oc-client/**/*",
+			"!packages/registry/src/vendor/**/*",
+			"!packages/registry/assets/**/*",
+			"!**/_package/**/*",
+			"!**/node_modules/**/*"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"correctness": {
+				"useJsxKeyInIterable": "off"
+			},
+			"complexity": {
+				"useLiteralKeys": "off",
+				"noExcessiveNestedTestSuites": "off"
+			},
+			"style": {
+				"noParameterAssign": "off",
+				"noNonNullAssertion": "off",
+				"useTemplate": "off"
+			},
+			"suspicious": {
+				"noExplicitAny": "off"
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"trailingCommas": "none",
+			"indentStyle": "space",
+			"quoteStyle": "single"
+		}
+	},
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": [
+				"packages/vite/**/*"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noBannedTypes": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"packages/oc-client-browser/**/*"
+			],
+			"linter": {
+				"rules": {
+					"performance": {
+						"noDelete": "off"
+					},
+					"style": {
+						"useConst": "off",
+						"useSingleVarDeclarator": "off"
+					},
+					"suspicious": {
+						"noDoubleEquals": "off",
+						"useIterableCallbackReturn": "off"
+					}
+				}
+			}
+		}
+	]
+}

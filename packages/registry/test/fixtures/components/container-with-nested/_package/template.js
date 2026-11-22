@@ -1,0 +1,1 @@
+var oc=oc||{};oc.components=oc.components||{};oc.components['5416e95c1f67da634412c5eab76feb517f29baa4']=function(model){return '<div>Hi, this is a nested component: ' + (model && model.nested) + '</div>'};

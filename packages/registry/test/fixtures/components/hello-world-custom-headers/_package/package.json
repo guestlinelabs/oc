@@ -1,0 +1,27 @@
+{
+	"name": "hello-world-custom-headers",
+	"description": "",
+	"version": "1.0.0",
+	"repository": "",
+	"oc": {
+		"files": {
+			"dataProvider": {
+				"type": "node.js",
+				"hashKey": "d9e0650d238e357065f5dc0f5383378294e78a27",
+				"src": "server.js",
+				"size": 188
+			},
+			"template": {
+				"type": "oc-template-es6",
+				"hashKey": "1b47ace709e6d7afd3c32f83363b113255b3cc38",
+				"src": "template.js",
+				"version": "2.0.0",
+				"size": 139
+			},
+			"static": []
+		},
+		"version": "0.50.67",
+		"packaged": true,
+		"date": 1462464333369
+	}
+}

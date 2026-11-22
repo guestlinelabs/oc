@@ -1,0 +1,1 @@
+var oc=oc||{};oc.components=oc.components||{};oc.components['927ec1c614991ec04d744d1e933cebecbbd23126']=function(model){var nested=(model&&model.nested)||[];return '<div>Hi, these are nested components:<ul>'+nested.map(function(c){return '<li>'+c+'</li>'}).join('')+'</ul></div>'};

@@ -1,0 +1,20 @@
+{
+	"name": "oc",
+	"private": true,
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"build": "bun run --filter @guestlinelabs/oc-registry build && bun run --filter @guestlinelabs/oc-vite build && bun run --filter @guestlinelabs/oc build",
+		"test": "bun run build && bun run --filter '*' test",
+		"test-silent": "bun run build && bun run --filter '*' test-silent",
+		"typecheck": "bun run build && bun run --filter '*' typecheck",
+		"lint": "bunx @biomejs/biome check .",
+		"release:check": "bun run test && bun run typecheck && bun run --filter '@guestlinelabs/*' pack:dry"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.6.4",
+		"@guestlinelabs/oc-registry": "workspace:*",
+		"@types/bun": "^1.4.4"
+	}
+}

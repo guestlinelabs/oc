@@ -1,0 +1,915 @@
+const expect = require('chai').expect;
+const sinon = require('sinon');
+
+describe('registry : routes : component', () => {
+  const ComponentRoute =
+    require('../../dist/registry/routes/component').default;
+  const mockedComponents = require('../fixtures/mocked-components');
+  const {
+    getLatestVersion
+  } = require('../../dist/registry/domain/version-handler');
+  let mockedRepository;
+  let resJsonStub;
+  let resSetStub;
+  let statusStub;
+  let componentRoute;
+
+  const templates = {
+    'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+  };
+  const initialise = (params) => {
+    resJsonStub = sinon.stub();
+    resSetStub = sinon.stub();
+    statusStub = sinon.stub().returns({
+      json: resJsonStub
+    });
+    mockedRepository = {
+      getCompiledView: sinon.stub().resolves(params.view),
+      getComponent: sinon.stub().resolves(params.package),
+      getLatestVersion: sinon
+        .stub()
+        .callsFake((component) => getLatestVersion(component.allVersions)),
+      getDataProvider: sinon
+        .stub()
+        .resolves({ content: params.data, filePath: '/path/to/server.js' }),
+      getTemplatesInfo: sinon.stub().returns([
+        {
+          type: 'oc-template-es6',
+          version: '6.0.1',
+          externals: []
+        },
+        {
+          type: 'oc-template-es6',
+          version: '6.0.2',
+          externals: []
+        }
+      ]),
+      getTemplate: (type) => templates[type],
+      getStaticFilePath: sinon.stub().returns('//my-cdn.com/files/')
+    };
+  };
+
+  describe('when getting a component with server.js execution timeout', () => {
+    let code;
+    let response;
+    before((done) => {
+      initialise(mockedComponents['timeout-component']);
+      componentRoute = ComponentRoute({}, mockedRepository);
+
+      const resStatus = (calledCode) => {
+        code = calledCode;
+        return {
+          json: (calledResponse) => {
+            response = calledResponse;
+            done();
+          }
+        };
+      };
+
+      componentRoute(
+        {
+          headers: {},
+          params: {
+            componentName: 'timeout-component',
+            componentVersion: '1.X.X'
+          }
+        },
+        {
+          conf: {
+            baseUrl: 'http://component.com/',
+            executionTimeout: 0.1
+          },
+          status: resStatus
+        }
+      );
+    });
+
+    it('should return 500 status code', () => {
+      expect(code).to.be.equal(500);
+    });
+
+    it('should respond with error message', () => {
+      expect(response.error).to.equal(
+        'Component execution error: timeout (100ms)'
+      );
+    });
+
+    it("should return component's name and request version", () => {
+      expect(response.name).to.equal('timeout-component');
+      expect(response.requestVersion).to.equal('1.X.X');
+    });
+  });
+
+  describe('when the data provider is disabled in the registry configuration', () => {
+    let response;
+    before((done) => {
+      initialise(mockedComponents['simple-component']);
+      componentRoute = ComponentRoute({}, mockedRepository);
+
+      componentRoute(
+        {
+          headers: {
+            accept: 'application/vnd.oc.unrendered+json'
+          },
+          params: {
+            componentName: 'simple-component',
+            componentVersion: '1.X.X'
+          },
+          query: { hello: 'world' }
+        },
+        {
+          conf: {
+            baseUrl: 'http://component.com/',
+            dataProvider: { enabled: false }
+          },
+          status: (code) => ({
+            json: (json) => {
+              response = { code, json };
+              done();
+            }
+          }),
+          set: sinon.stub()
+        }
+      );
+    });
+
+    it('should return 200 status code', () => {
+      expect(response.code).to.be.equal(200);
+    });
+
+    it('should not fetch the data provider from the storage', () => {
+      expect(mockedRepository.getDataProvider.called).to.be.false;
+    });
+
+    it('should use the request parameters as the view model', () => {
+      expect(response.json.data).to.eql({
+        component: {
+          props: {
+            hello: 'world',
+            _staticPath: '//my-cdn.com/files/',
+            _baseUrl: 'http://component.com/',
+            _componentName: 'simple-component',
+            _componentVersion: '1.0.0'
+          }
+        }
+      });
+    });
+  });
+
+  describe('when getting a component with a server.js that returns undefined data', () => {
+    before(() => {
+      initialise(mockedComponents['undefined-component']);
+      componentRoute = ComponentRoute({}, mockedRepository);
+
+      componentRoute(
+        {
+          headers: {},
+          params: { componentName: 'undefined-component' }
+        },
+        {
+          conf: {
+            baseUrl: 'http://components.com/'
+          },
+          status: statusStub
+        }
+      );
+    });
+
+    it('should return 500 status code', () => {
+      expect(statusStub.args[0][0]).to.be.equal(500);
+    });
+
+    it('should respond with error message for undefined data', () => {
+      expect(resJsonStub.args[0][0].error).to.equal(
+        'Component execution error: data object is undefined'
+      );
+    });
+
+    it("should return component's name and request version", () => {
+      expect(resJsonStub.args[0][0].name).to.equal('undefined-component');
+      expect(resJsonStub.args[0][0].requestVersion).to.equal('');
+    });
+  });
+
+  describe('when getting a component with server.js execution errors', () => {
+    before(() => {
+      initialise(mockedComponents['error-component']);
+      const plugins = {
+        a: {
+          handler: () => '',
+          description: ''
+        }
+      };
+      componentRoute = ComponentRoute(
+        {
+          plugins
+        },
+        mockedRepository
+      );
+
+      componentRoute(
+        {
+          headers: {},
+          params: { componentName: 'error-component' }
+        },
+        {
+          conf: {
+            baseUrl: 'http://components.com/',
+            plugins
+          },
+          status: statusStub
+        }
+      );
+    });
+
+    it('should return 500 status code', () => {
+      expect(statusStub.args[0][0]).to.be.equal(500);
+    });
+
+    it('should respond with error message including missing plugin', () => {
+      expect(resJsonStub.args[0][0].error).to.equal(
+        'Component execution error: c is not defined'
+      );
+    });
+
+    it("should return component's name and request version", () => {
+      expect(resJsonStub.args[0][0].name).to.equal('error-component');
+      expect(resJsonStub.args[0][0].requestVersion).to.equal('');
+    });
+  });
+
+  describe('when getting a component with server.js execution errors', () => {
+    describe('when has error that gets fired on first execution', () => {
+      before((done) => {
+        initialise(mockedComponents['async-error-component']);
+        componentRoute = ComponentRoute({}, mockedRepository);
+        statusStub.returns({
+          json: (response) => {
+            resJsonStub(response);
+            done();
+          }
+        });
+
+        componentRoute(
+          {
+            headers: {},
+            params: { componentName: 'async-error-component' }
+          },
+          {
+            conf: {
+              baseUrl: 'http://components.com/',
+              plugins: {}
+            },
+            status: statusStub
+          }
+        );
+      });
+
+      it('should return 500 status code', () => {
+        expect(statusStub.args[0][0]).to.be.equal(500);
+      });
+
+      it('should respond with error message for component execution error', () => {
+        expect(resJsonStub.args[0][0].error).to.equal(
+          'Component execution error: thisDoesnotExist is not defined'
+        );
+      });
+
+      it("should return component's name and request version", () => {
+        expect(resJsonStub.args[0][0].name).to.equal('async-error-component');
+        expect(resJsonStub.args[0][0].requestVersion).to.equal('');
+      });
+    });
+
+    describe('when has error that gets fired on following executions', () => {
+      let responses;
+      before((done) => {
+        responses = [];
+        initialise(mockedComponents['async-error2-component']);
+        componentRoute = ComponentRoute({}, mockedRepository);
+        statusStub.callsFake((code) => ({
+          json: (response) => {
+            responses.push({ status: code, response });
+            if (responses.length >= 2) {
+              done();
+            }
+          }
+        }));
+
+        componentRoute(
+          {
+            headers: {},
+            params: { componentName: 'async-error2-component' }
+          },
+          {
+            conf: {
+              baseUrl: 'http://components.com/',
+              plugins: {}
+            },
+            status: statusStub
+          }
+        );
+
+        componentRoute(
+          {
+            headers: {},
+            params: { componentName: 'async-error2-component' },
+            query: { error: true }
+          },
+          {
+            conf: {
+              baseUrl: 'http://components.com/',
+              plugins: {}
+            },
+            status: statusStub
+          }
+        );
+      });
+
+      it('should return 200 status code for successful request', () => {
+        expect(
+          responses.find((r) => r.status === 200 && !r.response.error)
+        ).to.not.be.undefined;
+      });
+
+      it('should return 500 status code when error happens', () => {
+        expect(
+          responses.find((r) => r.status === 500 && r.response.error)
+        ).to.not.be.undefined;
+      });
+
+      it('should respond without error for successful request', () => {
+        const ok = responses.find((r) => r.status === 200);
+        expect(ok.response.error).to.be.undefined;
+      });
+
+      it('should respond with error message for component execution error', () => {
+        const ko = responses.find((r) => r.status === 500);
+        expect(ko.response.error).to.equal(
+          'Component execution error: thisDoesnotExist is not defined'
+        );
+      });
+
+      it("should return component's name and request version for both requests", () => {
+        for (const { response } of responses) {
+          expect(response.name).to.equal('async-error2-component');
+          expect(response.requestVersion).to.equal('');
+        }
+      });
+    });
+  });
+
+  describe('when getting a component that implements a plugin', () => {
+    describe('when plugin not declared in package.json', () => {
+      before(() => {
+        initialise(mockedComponents['plugin-component']);
+        componentRoute = ComponentRoute({}, mockedRepository);
+
+        componentRoute(
+          {
+            headers: {},
+            params: { componentName: 'plugin-component' }
+          },
+          {
+            conf: {
+              baseUrl: 'http://components.com/',
+              plugins: {}
+            },
+            status: statusStub
+          }
+        );
+      });
+
+      it('should return 500 status code', () => {
+        expect(statusStub.args[0][0]).to.be.equal(500);
+      });
+
+      it('should respond with GENERIC_ERROR error code', () => {
+        expect(resJsonStub.args[0][0].code).to.equal('GENERIC_ERROR');
+      });
+
+      it('should respond with error message including missing plugin', () => {
+        expect(resJsonStub.args[0][0].error).to.contain(
+          'plugins.doSomething is not a function'
+        );
+      });
+
+      it("should return component's name and request version", () => {
+        expect(resJsonStub.args[0][0].name).to.equal('plugin-component');
+        expect(resJsonStub.args[0][0].requestVersion).to.equal('');
+      });
+    });
+
+    describe('when plugin declared in package.json', () => {
+      const conf = {
+        baseUrl: 'http://components.com/',
+        plugins: {
+          doSomething: {
+            handler: () => 'hello hello hello my friend',
+            description: ''
+          }
+        }
+      };
+      beforeEach(() => {
+        const component = { ...mockedComponents['plugin-component'] };
+        component.package.oc.plugins = ['doSomething'];
+        initialise(component);
+        componentRoute = ComponentRoute(conf, mockedRepository);
+      });
+
+      describe('when registry implements plugin', () => {
+        beforeEach((done) => {
+          componentRoute(
+            {
+              headers: {},
+              conf,
+              params: { componentName: 'plugin-component' }
+            },
+            {
+              conf,
+              status: statusStub
+            }
+          );
+          setTimeout(done);
+        });
+
+        it('should return 200 status code', () => {
+          expect(statusStub.args[0][0]).to.be.equal(200);
+        });
+
+        it('should use plugin inside compiledView', () => {
+          expect(resJsonStub.args[0][0].html).to.contain(
+            'hello hello hello my friend John'
+          );
+        });
+
+        it("should return component's name and request version", () => {
+          expect(resJsonStub.args[0][0].name).to.equal('plugin-component');
+          expect(resJsonStub.args[0][0].requestVersion).to.equal('');
+        });
+      });
+
+      describe('when registry does not implement plugin', () => {
+        beforeEach((done) => {
+          componentRoute(
+            {
+              headers: {},
+              params: { componentName: 'plugin-component' }
+            },
+            {
+              conf: { baseUrl: 'http://components.com/' },
+              status: statusStub
+            }
+          );
+          setTimeout(done);
+        });
+
+        it('should return 501 status code', () => {
+          expect(statusStub.args[0][0]).to.be.equal(501);
+        });
+
+        it('should respond with PLUGIN_MISSING_FROM_REGISTRY error code', () => {
+          expect(resJsonStub.args[0][0].code).to.equal(
+            'PLUGIN_MISSING_FROM_REGISTRY'
+          );
+        });
+
+        it('should respond with error message including missing plugin', () => {
+          expect(resJsonStub.args[0][0].error).to.equal(
+            'registry does not implement plugins: doSomething'
+          );
+        });
+
+        it("should return component's name and request version", () => {
+          expect(resJsonStub.args[0][0].name).to.equal('plugin-component');
+          expect(resJsonStub.args[0][0].requestVersion).to.equal('');
+        });
+      });
+    });
+  });
+
+  describe('when getting a component that requires a npm module', () => {
+    describe('when registry implements dependency', () => {
+      beforeEach((done) => {
+        initialise(mockedComponents['npm-component']);
+        componentRoute = ComponentRoute({}, mockedRepository);
+
+        componentRoute(
+          {
+            headers: {},
+            params: { componentName: 'npm-component' }
+          },
+          {
+            conf: {
+              local: true, //needed to invalidate the cache
+              baseUrl: 'http://components.com/',
+              plugins: {},
+              dependencies: ['lodash.isequal']
+            },
+            status: statusStub
+          }
+        );
+        setTimeout(done);
+      });
+
+      it('should return 200 status code', () => {
+        expect(statusStub.args[0][0]).to.be.equal(200);
+      });
+
+      it('should use plugin inside compiledView', () => {
+        expect(resJsonStub.args[0][0].html).to.contain('bye John');
+      });
+
+      it("should return component's name and request version", () => {
+        expect(resJsonStub.args[0][0].name).to.equal('npm-component');
+        expect(resJsonStub.args[0][0].requestVersion).to.equal('');
+      });
+    });
+
+    describe('when registry does not implement dependency', () => {
+      beforeEach((done) => {
+        initialise(mockedComponents['npm-component']);
+        componentRoute = ComponentRoute({}, mockedRepository);
+
+        componentRoute(
+          {
+            headers: {},
+            params: { componentName: 'npm-component' }
+          },
+          {
+            conf: {
+              local: true,
+              hotReloading: true, //needed to invalidate the cache
+              baseUrl: 'http://components.com/',
+              plugins: {},
+              dependencies: []
+            },
+            status: statusStub
+          }
+        );
+        setTimeout(done);
+      });
+
+      it('should return 501 status code', () => {
+        expect(statusStub.args[0][0]).to.be.equal(501);
+      });
+
+      it('should respond with DEPENDENCY_MISSING_FROM_REGISTRY error code', () => {
+        expect(resJsonStub.args[0][0].code).to.equal(
+          'DEPENDENCY_MISSING_FROM_REGISTRY'
+        );
+      });
+
+      it('should respond with error message including missing dependency', () => {
+        expect(resJsonStub.args[0][0].error).to.equal(
+          'Component is trying to use unavailable dependencies: lodash.isequal'
+        );
+      });
+
+      it("should return component's name and request version", () => {
+        expect(resJsonStub.args[0][0].name).to.equal('npm-component');
+        expect(resJsonStub.args[0][0].requestVersion).to.equal('');
+      });
+    });
+  });
+
+  describe('when getting a component with server.js that sets custom headers', () => {
+    before(() => {
+      initialise(mockedComponents['response-headers-component']);
+      componentRoute = ComponentRoute({}, mockedRepository);
+
+      componentRoute(
+        {
+          headers: {},
+          params: {
+            componentName: 'response-headers-component',
+            componentVersion: '1.X.X'
+          }
+        },
+        {
+          conf: {
+            baseUrl: 'http://component.com/',
+            executionTimeout: 0.1
+          },
+          status: statusStub,
+          set: resSetStub
+        }
+      );
+    });
+
+    it('should return 200 status code', () => {
+      expect(statusStub.args[0][0]).to.be.equal(200);
+    });
+
+    it('should set response headers', () => {
+      expect(resJsonStub.args[0][0].headers).to.be.undefined;
+      expect(resSetStub.args[0][0]).to.not.be.null;
+      expect(resSetStub.args[0][0]['test-header']).to.equal('test-value');
+    });
+
+    it("should return component's name and request version", () => {
+      expect(resJsonStub.args[0][0].name).to.equal(
+        'response-headers-component'
+      );
+      expect(resJsonStub.args[0][0].requestVersion).to.equal('1.X.X');
+    });
+  });
+
+  describe('when getting a simple component with server.js after headers component no custom headers should be set', () => {
+    before((done) => {
+      const headersComponent =
+        mockedComponents['another-response-headers-component'];
+      const simpleComponent = mockedComponents['simple-component'];
+      const templates = {
+        'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+      };
+
+      mockedRepository = {
+        getCompiledView: sinon.stub(),
+        getComponent: sinon.stub(),
+        getDataProvider: sinon.stub(),
+        getTemplatesInfo: sinon.stub().returns([
+          {
+            type: 'oc-template-es6',
+            version: '6.0.1',
+            externals: []
+          }
+        ]),
+        getTemplate: (type) => templates[type],
+        getStaticFilePath: sinon.stub().returns('//my-cdn.com/files/')
+      };
+
+      // Custom repository initialization to give us two components when invoked twice.
+      // The firts one with custom headers and the second without.
+
+      mockedRepository.getCompiledView
+        .onCall(0)
+        .resolves(headersComponent.view);
+      mockedRepository.getCompiledView.onCall(1).resolves(simpleComponent.view);
+
+      mockedRepository.getComponent
+        .onCall(0)
+        .resolves(headersComponent.package);
+      mockedRepository.getComponent.onCall(1).resolves(simpleComponent.package);
+
+      mockedRepository.getDataProvider.onCall(0).resolves({
+        content: headersComponent.data,
+        filePath: '/path/to/server.js'
+      });
+      mockedRepository.getDataProvider.onCall(1).resolves({
+        content: simpleComponent.data,
+        filePath: '/path/to/another-server.js'
+      });
+
+      componentRoute = ComponentRoute({}, mockedRepository);
+
+      resJsonStub = sinon.stub();
+      resSetStub = sinon.stub();
+
+      statusStub = sinon.stub().returns({
+        json: (response) => {
+          resJsonStub(response);
+          if (statusStub.args.length >= 2) {
+            done();
+          }
+        }
+      });
+
+      componentRoute(
+        {
+          headers: {},
+          params: {
+            componentName: 'another-response-headers-component',
+            componentVersion: '1.X.X'
+          }
+        },
+        {
+          conf: {
+            baseUrl: 'http://component.com/',
+            executionTimeout: 0.1
+          },
+          status: statusStub,
+          set: resSetStub
+        }
+      );
+
+      componentRoute(
+        {
+          headers: {},
+          params: {
+            componentName: 'simple-component',
+            componentVersion: '1.X.X'
+          }
+        },
+        {
+          conf: {
+            baseUrl: 'http://component.com/',
+            executionTimeout: 0.1
+          },
+          status: statusStub,
+          set: resSetStub
+        }
+      );
+    });
+
+    it('should return 200 status code for the first component', () => {
+      expect(statusStub.args[0][0]).to.be.equal(200);
+    });
+
+    it('should return "response-headers-component" name for the first component\'s name and request version', () => {
+      const response = resJsonStub.args
+        .map(([result]) => result)
+        .find((result) => result.name === 'another-response-headers-component');
+      expect(response.name).to.equal('another-response-headers-component');
+      expect(response.requestVersion).to.equal('1.X.X');
+    });
+
+    it('should set response headers for the first component', () => {
+      expect(resJsonStub.args[0][0].headers).to.be.undefined;
+      expect(resSetStub.args[0][0]).to.not.be.null;
+      expect(resSetStub.args[0][0]['another-test-header']).to.equal(
+        'another-test-value'
+      );
+    });
+
+    it('should return 200 status code for the second component', () => {
+      expect(statusStub.args[1][0]).to.be.equal(200);
+    });
+
+    it('should return "simple-component" name for the second component\'s name and request version', () => {
+      const response = resJsonStub.args
+        .map(([result]) => result)
+        .find((result) => result.name === 'simple-component');
+      expect(response.name).to.equal('simple-component');
+      expect(response.requestVersion).to.equal('1.X.X');
+    });
+
+    it('should not set custom response for the second component', () => {
+      expect(resJsonStub.args[1][0].headers).to.be.undefined;
+      expect(resSetStub.calledTwice).to.be.false;
+    });
+  });
+
+  describe('when getting a component info for a component that sets custom headers', () => {
+    before(() => {
+      initialise(mockedComponents['response-headers-component']);
+      componentRoute = ComponentRoute({}, mockedRepository);
+
+      componentRoute(
+        {
+          headers: { accept: 'application/vnd.oc.info+json' },
+          params: {
+            componentName: 'response-headers-component',
+            componentVersion: '1.0.0'
+          }
+        },
+        {
+          conf: {
+            baseUrl: 'http://component.com/',
+            executionTimeout: 0.1
+          },
+          status: statusStub,
+          set: resSetStub
+        }
+      );
+    });
+
+    it('should return 200 status code', () => {
+      expect(statusStub.args[0][0]).to.be.equal(200);
+    });
+
+    it('should return no custom headers', () => {
+      expect(resJsonStub.args[0][0].headers).to.be.undefined;
+      expect(resSetStub.called).to.be.false;
+    });
+
+    it("should return component's name and request version", () => {
+      expect(resJsonStub.args[0][0].name).to.equal(
+        'response-headers-component'
+      );
+      expect(resJsonStub.args[0][0].requestVersion).to.equal('1.0.0');
+    });
+
+    it('should not return rendered HTML', () => {
+      expect(resJsonStub.args[0][0].html).to.be.undefined;
+    });
+  });
+
+  describe('when the registry has an onComponentRequest hook', () => {
+    const simple = mockedComponents['simple-component'];
+    const requestComponent = (onComponentRequest, componentVersion) =>
+      new Promise((resolve) => {
+        initialise({
+          ...simple,
+          package: {
+            ...simple.package,
+            allVersions: ['1.0.0', '2.0.0', '2.1.0', '3.0.0-beta.1']
+          }
+        });
+        componentRoute = ComponentRoute({}, mockedRepository);
+        componentRoute(
+          {
+            headers: { 'user-agent': 'test' },
+            params: { componentName: 'simple-component', componentVersion },
+            query: { hello: 'world' }
+          },
+          {
+            conf: { baseUrl: 'http://component.com/', onComponentRequest },
+            status: (code) => ({ json: (json) => resolve({ code, json }) }),
+            set: sinon.stub()
+          }
+        );
+      });
+
+    it('should pass the resolved request context to the hook', async () => {
+      const hook = sinon.stub().returns(undefined);
+      await requestComponent(hook, '1.X.X');
+
+      const ctx = hook.args[0][0];
+      expect(ctx.name).to.equal('simple-component');
+      expect(ctx.requestedVersion).to.equal('1.X.X');
+      expect(ctx.version).to.equal('1.0.0');
+      expect(ctx.latestVersion).to.equal('2.1.0');
+      expect(ctx.component.oc.files.template.type).to.equal('oc-template-es6');
+      expect(ctx.headers['user-agent']).to.equal('test');
+      expect(ctx.parameters).to.eql({ hello: 'world' });
+    });
+
+    it('should render the component when the hook returns nothing', async () => {
+      const response = await requestComponent(() => undefined, '1.0.0');
+
+      expect(response.code).to.equal(200);
+      expect(response.json.html).to.contain('hello');
+    });
+
+    it('should respond with the rejection returned by the hook without rendering', async () => {
+      const response = await requestComponent(
+        ({ version, latestVersion }) =>
+          version !== latestVersion
+            ? { status: 410, code: 'VERSION_TOO_OLD', error: 'Upgrade' }
+            : undefined,
+        '1.0.0'
+      );
+
+      expect(response.code).to.equal(410);
+      expect(response.json.code).to.equal('VERSION_TOO_OLD');
+      expect(response.json.error).to.equal('Upgrade');
+      expect(response.json.name).to.equal('simple-component');
+      expect(response.json.requestVersion).to.equal('1.0.0');
+      expect(mockedRepository.getCompiledView.called).to.be.false;
+    });
+
+    it('should apply default rejection values for an async hook', async () => {
+      const response = await requestComponent(async () => ({}), '1.0.0');
+
+      expect(response.code).to.equal(403);
+      expect(response.json.code).to.equal('COMPONENT_REQUEST_REJECTED');
+      expect(response.json.error).to.equal(
+        'Component request rejected by the registry'
+      );
+    });
+
+    it('should respond with 500 when the hook throws', async () => {
+      const response = await requestComponent(() => {
+        throw new Error('boom');
+      }, '1.0.0');
+
+      expect(response.code).to.equal(500);
+      expect(response.json.code).to.equal('COMPONENT_REQUEST_HOOK_FAILED');
+      expect(response.json.error).to.equal(
+        'onComponentRequest hook failed: Error: boom'
+      );
+    });
+
+    it('should respond with 500 when the async hook rejects', async () => {
+      const response = await requestComponent(
+        () => Promise.reject(new Error('async boom')),
+        '1.0.0'
+      );
+
+      expect(response.code).to.equal(500);
+      expect(response.json.code).to.equal('COMPONENT_REQUEST_HOOK_FAILED');
+    });
+
+    it('should apply the hook to component info requests', async () => {
+      initialise(simple);
+      const response = await new Promise((resolve) => {
+        ComponentRoute({}, mockedRepository)(
+          {
+            headers: { accept: 'application/vnd.oc.info+json' },
+            params: { componentName: 'simple-component' }
+          },
+          {
+            conf: {
+              baseUrl: 'http://component.com/',
+              onComponentRequest: () => ({ status: 410 })
+            },
+            status: (code) => ({ json: (json) => resolve({ code, json }) })
+          }
+        );
+      });
+
+      expect(response.code).to.equal(410);
+    });
+  });
+});

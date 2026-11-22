@@ -1,0 +1,105 @@
+import { type StorageAdapter, strings } from '../../../storage';
+import type { ComponentsList, Config } from '../../../types';
+import isEqual from '../../../utils/is-equal';
+import getUnixUTCTimestamp from '../../../utils/unix-utc-timestamp';
+import eventsHandler from '../events-handler';
+import getComponentsList from './components-list';
+
+export default function componentsCache(conf: Config, cdn: StorageAdapter) {
+  let cachedComponentsList: ComponentsList;
+  let refreshLoop: NodeJS.Timeout;
+  let closed = false;
+
+  const componentsList = getComponentsList(conf, cdn);
+
+  const poll = () => {
+    return setTimeout(async () => {
+      try {
+        const data = await componentsList.getFromJson();
+
+        eventsHandler.fire('cache-poll', getUnixUTCTimestamp());
+
+        if (data.lastEdit > cachedComponentsList.lastEdit) {
+          cachedComponentsList = data;
+        }
+      } catch (err: any) {
+        eventsHandler.fire('error', {
+          code: 'components_list_get',
+          message: err?.message || String(err)
+        });
+      }
+      if (!closed) {
+        refreshLoop = poll();
+      }
+    }, conf.pollingInterval * 1000);
+  };
+
+  const cacheDataAndStartPolling = (data: ComponentsList) => {
+    cachedComponentsList = data;
+    if (!closed) {
+      refreshLoop = poll();
+    }
+
+    return data;
+  };
+
+  const throwError = (code: string, message: any) => {
+    eventsHandler.fire('error', { code, message: message?.message ?? message });
+    throw code;
+  };
+
+  return {
+    get(): ComponentsList {
+      if (!cachedComponentsList) {
+        return throwError(
+          'components_cache_empty',
+          `The component's cache was empty`
+        );
+      }
+
+      return cachedComponentsList;
+    },
+
+    async load(): Promise<ComponentsList> {
+      const jsonComponents = await componentsList.getFromJson().catch((err) => {
+        if (err?.code === strings.errors.STORAGE.FILE_NOT_FOUND_CODE)
+          return null;
+
+        return Promise.reject(err);
+      });
+      const dirComponents = await componentsList
+        .getFromDirectories(jsonComponents)
+        .catch((err) => throwError('components_list_get', err));
+
+      if (
+        !jsonComponents ||
+        !isEqual(dirComponents.components, jsonComponents.components)
+      ) {
+        await componentsList
+          .save(dirComponents)
+          .catch((err) => throwError('components_list_save', err));
+      }
+      cacheDataAndStartPolling(dirComponents);
+
+      return dirComponents;
+    },
+
+    async refresh(): Promise<ComponentsList> {
+      clearTimeout(refreshLoop);
+      try {
+        // Passing components that we know are fine, so it doesn't refresh invalid components
+        const components = await componentsList.refresh(cachedComponentsList);
+        cacheDataAndStartPolling(components);
+
+        return components;
+      } catch (err) {
+        return throwError('components_cache_refresh', err);
+      }
+    },
+
+    close(): void {
+      closed = true;
+      clearTimeout(refreshLoop);
+    }
+  };
+}

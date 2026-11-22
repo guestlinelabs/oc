@@ -1,0 +1,953 @@
+import { randomUUID } from 'node:crypto';
+import type { IncomingHttpHeaders } from 'node:http';
+import vm from 'node:vm';
+import createRenderTemplate from '../../../vendor/oc-client/template-renderer';
+import emptyResponseHandler from '../../../vendor/oc-empty-response-handler';
+import strings from '../../../resources';
+import settings from '../../../resources/settings';
+import type {
+  Component,
+  ComponentRequestRejection,
+  Config,
+  OcParameter,
+  PluginContext,
+  Plugins
+} from '../../../types';
+import { parseAcceptLanguage } from '../../../utils/accept-language';
+import BoundedCache from '../../../utils/bounded-cache';
+import errorToString from '../../../utils/error-to-string';
+import { fromPromise } from '../../../utils/universalify';
+import eventsHandler from '../../domain/events-handler';
+import type { CookieOptions } from '../../domain/http-server/types';
+import NestedRenderer from '../../domain/nested-renderer';
+import type { Repository } from '../../domain/repository';
+import RequireWrapper from '../../domain/require-wrapper';
+import * as urlBuilder from '../../domain/url-builder';
+import * as validator from '../../domain/validators';
+import { validateTemplateOcVersion } from '../../domain/validators';
+import {
+  compileParameterSchema,
+  processParameters
+} from './component-parameter-processor';
+import { processStackTrace } from './format-error-stack';
+import * as getComponentFallback from './get-component-fallback';
+
+export interface RendererOptions {
+  action?: string;
+  conf: Config;
+  headers: IncomingHttpHeaders;
+  ip: string;
+  name: string;
+  parameters: Record<string, string>;
+  version: string;
+  omitHref?: boolean;
+}
+
+export interface GetComponentResult {
+  status: number;
+  headers?: Record<string, string>;
+  cookies?: Array<{
+    name: string;
+    value: any;
+    options?: CookieOptions;
+  }>;
+  response: {
+    data?: any;
+    type?: string;
+    code?: string;
+    error?: unknown;
+    version?: string;
+    html?: string;
+    renderMode?: string;
+    requestVersion?: string;
+    name?: string;
+    details?: {
+      message: string;
+      stack: string;
+      originalError: unknown;
+      frame?: string;
+    };
+    missingPlugins?: string[];
+    missingDependencies?: string[];
+  };
+}
+
+export type RenderComponent = (
+  options: RendererOptions,
+  cb: (result: GetComponentResult) => void
+) => void;
+
+class ComponentRequestRejected {
+  constructor(readonly result: GetComponentResult) {}
+}
+
+export const stream = Symbol('stream');
+const MAX_ARTIFACT_CACHE_ENTRIES = 1000;
+const noop = () => {};
+const noopConsole = Object.fromEntries(
+  Object.keys(console).map((key) => [key, noop])
+);
+
+const parseTemplatesHeader = (templates: string): string[] => {
+  const result: string[] = [];
+  let start = 0;
+
+  for (let index = 0; index <= templates.length; index++) {
+    const char = templates[index];
+    if (char === ',' || char === ';' || index === templates.length) {
+      result.push(templates.slice(start, index));
+      start = templates.indexOf(';', index);
+      if (start === -1) {
+        break;
+      }
+      index = start;
+      start++;
+    }
+  }
+
+  return result;
+};
+
+/**
+ * Converts the plugins to a function that returns a record of plugins with the context applied
+ * Caches the plugins without context and applies the context to the plugins that need it
+ * to avoid creating a new function for each component if possible
+ * @param plugins - The plugins to convert
+ * @returns A function that returns a record of plugins with the context applied
+ */
+function pluginConverter(plugins: Plugins = {}) {
+  const pluginsMap = {
+    withoutContext: {} as Record<string, (...args: any[]) => any>,
+    withContext: {} as Record<
+      string,
+      (ctx: PluginContext) => (...args: any[]) => any
+    >,
+    needsContext: false
+  };
+  for (const [name, { handler, context }] of Object.entries(plugins)) {
+    if (context) {
+      pluginsMap.withContext[name] = handler as any;
+      pluginsMap.needsContext = true;
+    } else {
+      pluginsMap.withoutContext[name] = handler;
+    }
+  }
+
+  return (ctx: PluginContext) => {
+    if (!pluginsMap.needsContext) {
+      return pluginsMap.withoutContext;
+    }
+    const pluginsWithContextApplied = {} as Record<
+      string,
+      (...args: any[]) => any
+    >;
+    for (const [name, handler] of Object.entries(pluginsMap.withContext)) {
+      pluginsWithContextApplied[name] = handler(ctx);
+    }
+
+    return {
+      ...pluginsMap.withoutContext,
+      ...pluginsWithContextApplied
+    };
+  };
+}
+
+export default function getComponent(
+  conf: Config,
+  repository: Repository
+): RenderComponent {
+  // Template modules are resolved lazily through the repository so the
+  // registry's built-in templates and user-provided `templates` (which
+  // override built-ins of the same type) are all available to the renderer,
+  // mirroring what oc-client's templateModules map contained upstream.
+  const templateModules = new Proxy(
+    {},
+    {
+      get: (_target, type) =>
+        typeof type === 'string' ? repository.getTemplate(type) : undefined
+    }
+  );
+  const renderTemplate = createRenderTemplate(templateModules);
+  const cache = new BoundedCache(MAX_ARTIFACT_CACHE_ENTRIES);
+  const convertPlugins = pluginConverter(conf.plugins);
+  const pluginNamesByConfig = new WeakMap<Config, Set<string>>();
+  const getRegistryPluginNames = (config: Config) => {
+    let names = pluginNamesByConfig.get(config);
+    if (!names) {
+      names = new Set(Object.keys(config.plugins || {}));
+      pluginNamesByConfig.set(config, names);
+    }
+    return names;
+  };
+  const inFlight = new Map<string, Promise<unknown>>();
+  const parameterSchemaCache = new WeakMap<
+    object,
+    ReturnType<typeof compileParameterSchema>
+  >();
+  const emptyParameterSchema = compileParameterSchema(undefined);
+  const getCompiledParameterSchema = (
+    expectedParameters: Record<string, OcParameter> | undefined
+  ) => {
+    if (!expectedParameters || typeof expectedParameters !== 'object') {
+      return emptyParameterSchema;
+    }
+    let compiled = parameterSchemaCache.get(expectedParameters as object);
+    if (compiled) {
+      return compiled;
+    }
+    if (Object.keys(expectedParameters).length === 0) {
+      parameterSchemaCache.set(
+        expectedParameters as object,
+        emptyParameterSchema
+      );
+      return emptyParameterSchema;
+    }
+    compiled = compileParameterSchema(expectedParameters);
+    parameterSchemaCache.set(expectedParameters as object, compiled);
+    return compiled;
+  };
+
+  const singleFlight = <T>(key: string, operation: () => Promise<T>) => {
+    const pending = inFlight.get(key) as Promise<T> | undefined;
+    if (pending) {
+      return pending;
+    }
+
+    const promise = operation().finally(() => {
+      inFlight.delete(key);
+    });
+    inFlight.set(key, promise);
+    return promise;
+  };
+
+  type EnvLookupCallback = (err: unknown, env?: Record<string, string>) => void;
+
+  const lookupEnv = (component: Component, cb: EnvLookupCallback): void => {
+    const cacheKey = `${component.name}/${component.version}/.env`;
+    const cached = cache.get<Record<string, string>>('file-contents', cacheKey);
+
+    if (cached !== undefined) {
+      cb(null, cached);
+      return;
+    }
+
+    singleFlight(cacheKey, async () => {
+      const env = component.oc.files.env
+        ? await repository.getEnv(component.name, component.version)
+        : {};
+      cache.set('file-contents', cacheKey, env);
+      return env;
+    }).then((env) => cb(null, env), cb);
+  };
+
+  const enrichLocalErrorStack = async (
+    component: Component,
+    err: any,
+    response: GetComponentResult
+  ): Promise<void> => {
+    try {
+      const { content } = await repository
+        .getDataProvider(component.name, component.version)
+        .catch(() => ({ content: null }));
+      if (!content || !err.stack || !response.response.details) {
+        return;
+      }
+
+      const processedStack = await processStackTrace({
+        stackTrace: err.stack,
+        code: content
+      }).catch(() => null);
+      if (!processedStack) {
+        return;
+      }
+
+      response.response.details.stack = processedStack.stack;
+      response.response.details.frame = processedStack.frame;
+
+      console.log(
+        `Error rendering component ${component.name} ${component.version}`
+      );
+      console.log(processedStack.stack);
+      console.log(processedStack.frame);
+    } catch {
+      // keep the original error stack when local diagnostics fail
+    }
+  };
+
+  const resolveComponent = (
+    name: string,
+    version: string,
+    options: RendererOptions,
+    cb: (err: unknown, component: Component) => void
+  ): void => {
+    getComponentCb(name, version, (err, component) => {
+      const hook = options.conf.onComponentRequest;
+      if (err || !hook) {
+        return cb(err, component);
+      }
+
+      const decide = (rejection: ComponentRequestRejection | undefined) =>
+        rejection
+          ? cb(
+              new ComponentRequestRejected({
+                status: rejection.status ?? 403,
+                response: {
+                  code: rejection.code ?? 'COMPONENT_REQUEST_REJECTED',
+                  error:
+                    rejection.error ??
+                    strings.errors.registry.COMPONENT_REQUEST_REJECTED
+                }
+              }),
+              component
+            )
+          : cb(null, component);
+      const fail = (hookErr: unknown) => {
+        const message = errorToString(hookErr);
+        eventsHandler.fire('error', {
+          code: 'COMPONENT_REQUEST_HOOK_FAILED',
+          message
+        });
+        cb(
+          new ComponentRequestRejected({
+            status: 500,
+            response: {
+              code: 'COMPONENT_REQUEST_HOOK_FAILED',
+              error:
+                strings.errors.registry.COMPONENT_REQUEST_HOOK_FAILED(message)
+            }
+          }),
+          component
+        );
+      };
+
+      let decision: ReturnType<typeof hook>;
+      try {
+        decision = hook({
+          name,
+          requestedVersion: version,
+          version: component.version,
+          get latestVersion() {
+            return repository.getLatestVersion(component);
+          },
+          component,
+          headers: options.headers,
+          parameters: options.parameters,
+          action: options.action
+        });
+      } catch (hookErr) {
+        return fail(hookErr);
+      }
+
+      if (decision instanceof Promise) {
+        decision.then(decide, fail);
+      } else {
+        decide(decision);
+      }
+    });
+  };
+
+  const renderer = (
+    options: RendererOptions,
+    cb: (result: GetComponentResult) => void
+  ): void => {
+    const retrievalStart = process.hrtime.bigint();
+    let retrievedHref: string | undefined;
+    let retrievedVersion: string | undefined;
+    let retrievedRenderMode: string | undefined;
+    let responseHeaders: Record<string, string> | undefined;
+    const responseCookies: Array<{
+      name: string;
+      value: any;
+      options?: CookieOptions;
+    }> = [];
+
+    const getLanguage = () => {
+      const paramOverride =
+        !!options.parameters && options.parameters['__ocAcceptLanguage'];
+      return paramOverride || options.headers['accept-language'];
+    };
+
+    const fireComponentRetrievedEvent = (result: GetComponentResult): void => {
+      if (!eventsHandler.hasListeners('component-retrieved')) {
+        return;
+      }
+
+      const eventData: Record<string, unknown> = {
+        headers: options.headers,
+        name: options.name,
+        parameters: options.parameters,
+        requestVersion: options.version || ''
+      };
+
+      if (retrievedHref !== undefined) {
+        eventData['href'] = retrievedHref;
+        eventData['version'] = retrievedVersion;
+        eventData['renderMode'] = retrievedRenderMode;
+      }
+
+      if (result.response.error) {
+        Object.assign(eventData, result.response);
+      }
+
+      eventData['status'] = result.status;
+      eventData['duration'] =
+        Number(process.hrtime.bigint() - retrievalStart) / 1e3;
+
+      eventsHandler.fire('component-retrieved', eventData as any);
+    };
+
+    const callback = (result: GetComponentResult) => {
+      if (responseCookies.length > 0 && !result.cookies) {
+        result.cookies = responseCookies;
+      }
+
+      Object.assign(result.response, {
+        name: options.name,
+        requestVersion: options.version || ''
+      });
+
+      fireComponentRetrievedEvent(result);
+      return cb(result);
+    };
+
+    let componentCallbackDone = false;
+    let callbackTimeout: ReturnType<typeof setTimeout> | undefined;
+    const conf = options.conf;
+    const requestedComponent = {
+      name: options.name,
+      version: options.version || '',
+      parameters: options.parameters
+    };
+
+    resolveComponent(
+      requestedComponent.name,
+      requestedComponent.version,
+      options,
+      (err, component) => {
+        if (err instanceof ComponentRequestRejected) {
+          return callback(err.result);
+        }
+
+        // check route exist for component and version
+        if (err) {
+          if (conf.fallbackRegistryUrl) {
+            return getComponentFallback.getComponent(
+              conf.fallbackRegistryUrl,
+              options.headers,
+              requestedComponent,
+              callback as any
+            );
+          }
+
+          return callback({
+            status: 404,
+            response: {
+              code: 'NOT_FOUND',
+              error: err
+            }
+          });
+        }
+
+        // Skip rendering and return only the component info in case of 'accept: application/vnd.oc.info+json'
+        if (options.headers.accept === settings.registry.acceptInfoHeader) {
+          return callback({
+            status: 200,
+            response: {
+              type: conf.local ? 'oc-component-local' : 'oc-component',
+              version: component.version,
+              requestVersion: requestedComponent.version,
+              name: requestedComponent.name
+            }
+          });
+        }
+
+        // check component requirements are satisfied by registry
+        const pluginsCompatibility = validator.validatePluginsRequirements(
+          component.oc.plugins,
+          getRegistryPluginNames(conf)
+        );
+
+        if (!pluginsCompatibility.isValid) {
+          return callback({
+            status: 501,
+            response: {
+              code: 'PLUGIN_MISSING_FROM_REGISTRY',
+              error: strings.errors.registry.PLUGIN_NOT_IMPLEMENTED(
+                pluginsCompatibility.missing.join(', ')
+              ),
+              missingPlugins: pluginsCompatibility.missing
+            }
+          });
+        }
+
+        // sanitise and check params (compiled schema + single scan)
+        const compiledParameterSchema = getCompiledParameterSchema(
+          component.oc.parameters as unknown as Record<string, OcParameter>
+        );
+        const { params, validation: validationResult } = processParameters(
+          requestedComponent.parameters as unknown as Record<
+            string,
+            string | number | boolean
+          >,
+          compiledParameterSchema
+        );
+
+        if (!options.action && !validationResult.isValid) {
+          return callback({
+            status: 400,
+            response: {
+              code: 'NOT_VALID_REQUEST',
+              error: validationResult.errors.message
+            }
+          });
+        }
+
+        if (component.oc.files.template.minOcVersion) {
+          const templateOcVersionResult = validateTemplateOcVersion(
+            component.oc.files.template.minOcVersion
+          );
+          if (!templateOcVersionResult.isValid) {
+            return callback({
+              status: 400,
+              response: {
+                code: 'TEMPLATE_REQUIRES_HIGHER_OC_VERSION',
+                error: strings.errors.cli.TEMPLATE_OC_VERSION_NOT_VALID(
+                  templateOcVersionResult.error.minOcVersion,
+                  templateOcVersionResult.error.registryVersion
+                )
+              }
+            });
+          }
+        }
+
+        const templateType = component.oc.files.template.type;
+
+        const ocTemplate = repository.getTemplate(templateType);
+        if (!ocTemplate) {
+          return callback({
+            status: 400,
+            response: {
+              code: 'TEMPLATE_NOT_SUPPORTED',
+              error:
+                strings.errors.registry.TEMPLATE_NOT_SUPPORTED(templateType)
+            }
+          });
+        }
+
+        const returnComponent = (err: any, data: any) => {
+          if (componentCallbackDone) {
+            return;
+          }
+          componentCallbackDone = true;
+          if (callbackTimeout) {
+            clearTimeout(callbackTimeout);
+            callbackTimeout = undefined;
+          }
+
+          const componentHref = urlBuilder.component(
+            {
+              name: component.name,
+              version: requestedComponent.version,
+              parameters: params as Record<string, string>
+            },
+            conf.baseUrl
+          );
+
+          const isUnrendered =
+            options.headers.accept === settings.registry.acceptUnrenderedHeader;
+
+          const isValidClientRequest = String(
+            options.headers['user-agent'] || ''
+          ).includes('oc-client-');
+          const templatesHeader = options.headers['templates'];
+          let isTemplateSupportedByClient = false;
+          if (isUnrendered && isValidClientRequest && templatesHeader) {
+            const supportedTemplates = parseTemplatesHeader(
+              templatesHeader as string
+            );
+            isTemplateSupportedByClient = supportedTemplates.includes(
+              component.oc.files.template.type
+            );
+          }
+
+          let renderMode = options.action ? 'unrendered' : 'rendered';
+          if (isUnrendered) {
+            renderMode = 'unrendered';
+            if (isValidClientRequest && !isTemplateSupportedByClient) {
+              renderMode = 'rendered';
+            }
+          }
+
+          retrievedHref = componentHref;
+          retrievedVersion = component.version;
+          retrievedRenderMode = renderMode;
+
+          if (err || !data) {
+            err =
+              err ||
+              new Error(strings.errors.registry.DATA_OBJECT_IS_UNDEFINED);
+            // `statusCode` is what oc-server's ServerError sets.
+            const status = Number(err.status ?? err.statusCode) || 500;
+
+            eventsHandler.fire('data-provider-error', {
+              status,
+              name: component.name,
+              requestVersion: requestedComponent.version,
+              parameters: params,
+              version: component.version,
+              error: err
+            });
+
+            const response = {
+              status,
+              response: {
+                code: 'GENERIC_ERROR',
+                error: strings.errors.registry.COMPONENT_EXECUTION_ERROR(
+                  err.message || (typeof err === 'string' ? err : '')
+                ),
+                details: {
+                  message: err.message,
+                  stack: err.stack,
+                  originalError: err,
+                  frame: undefined as string | undefined
+                }
+              }
+            };
+
+            if (conf.local && err.stack) {
+              enrichLocalErrorStack(component, err, response)
+                .catch(() => {})
+                .then(() => callback(response));
+              return;
+            }
+
+            return callback(response);
+          }
+
+          const response: {
+            baseUrl: string;
+            type: string;
+            version: string;
+            requestVersion: string;
+            name: string;
+            renderMode: string;
+            href?: string;
+          } = {
+            baseUrl: conf.baseUrl,
+            type: conf.local ? 'oc-component-local' : 'oc-component',
+            version: component.version,
+            requestVersion: requestedComponent.version,
+            name: requestedComponent.name,
+            renderMode
+          };
+
+          if (!options.omitHref) {
+            response.href = componentHref;
+          }
+
+          if (renderMode === 'unrendered') {
+            callback({
+              status: 200,
+              ...(responseHeaders ? { headers: responseHeaders } : {}),
+              response: Object.assign(response, {
+                data: data,
+                template: {
+                  src: repository.getStaticFilePath(
+                    component.name,
+                    component.version,
+                    'template.js'
+                  ),
+                  type: component.oc.files.template.type,
+                  key: component.oc.files.template.hashKey
+                }
+              })
+            });
+          } else {
+            const cacheKey = `${component.name}/${component.version}/template.js`;
+            const cached = cache.get('file-contents', cacheKey);
+            const key = component.oc.files.template.hashKey;
+            const id = randomUUID();
+            const renderOptions = {
+              href: componentHref,
+              key,
+              version: component.version,
+              name: component.name,
+              templateType: component.oc.files.template.type,
+              container: component.oc.container,
+              renderInfo: component.oc.renderInfo,
+              id
+            };
+            data.id = id;
+
+            const returnResult = (template: any) => {
+              renderTemplate(
+                template,
+                data,
+                renderOptions,
+                (err: Error, html: string) => {
+                  if (err) {
+                    return callback({
+                      status: 500,
+                      response: {
+                        code: 'INTERNAL_SERVER_ERROR',
+                        error: err
+                      }
+                    });
+                  }
+
+                  callback({
+                    status: 200,
+                    ...(responseHeaders ? { headers: responseHeaders } : {}),
+                    response: Object.assign(response, { html })
+                  });
+                }
+              );
+            };
+
+            if (cached !== undefined && !conf.hotReloading) {
+              returnResult(cached);
+            } else {
+              const loadTemplate = async () => {
+                const templateText = await repository.getCompiledView(
+                  component.name,
+                  component.version
+                );
+                const template = ocTemplate.getCompiledTemplate(
+                  templateText,
+                  key
+                );
+                cache.set('file-contents', cacheKey, template);
+                return template;
+              };
+              const templatePromise = conf.hotReloading
+                ? loadTemplate()
+                : singleFlight(cacheKey, loadTemplate);
+              templatePromise.then(returnResult).catch((error) =>
+                callback({
+                  status: 500,
+                  response: {
+                    code: 'INTERNAL_SERVER_ERROR',
+                    error
+                  }
+                })
+              );
+            }
+          }
+        };
+        const staticPath = repository
+          .getStaticFilePath(component.name, component.version, '')
+          .replace(/^https:/, '');
+
+        const dataProviderDisabled = conf.dataProvider?.enabled === false;
+
+        if (dataProviderDisabled || !component.oc.files.dataProvider) {
+          const { __oc_Retry, ...props } = params;
+          props['_staticPath'] = staticPath;
+          props['_baseUrl'] = conf.baseUrl;
+          props['_componentName'] = component.name;
+          props['_componentVersion'] = component.version;
+
+          returnComponent(null, { component: { props } });
+        } else {
+          lookupEnv(component, (err, env) => {
+            if (err) {
+              componentCallbackDone = true;
+
+              return callback({
+                status: 502,
+                response: {
+                  code: 'ENV_RESOLVING_ERROR',
+                  error: strings.errors.registry.RESOLVING_ERROR
+                }
+              });
+            }
+
+            const cacheKey = `${component.name}/${component.version}/server.js`;
+            const cached = cache.get<(...args: any[]) => any>(
+              'file-contents',
+              cacheKey
+            );
+            const setEmptyResponse =
+              emptyResponseHandler.contextDecorator(returnComponent);
+            let parsedAcceptLanguage:
+              | ReturnType<typeof parseAcceptLanguage>
+              | undefined;
+            const contextObj = {
+              action: options.action,
+              get acceptLanguage() {
+                parsedAcceptLanguage ??= parseAcceptLanguage(getLanguage()!);
+                return parsedAcceptLanguage;
+              },
+              baseUrl: conf.baseUrl,
+              env: { ...conf.env, ...(env || {}) },
+              params,
+              plugins: convertPlugins({
+                name: component.name,
+                version: component.version
+              }),
+              renderComponent: nestedRenderComponent,
+              renderComponents: nestedRenderComponents,
+              requestHeaders: options.headers,
+              requestIp: options.ip,
+              setEmptyResponse,
+              staticPath,
+              setHeader: (header?: string, value?: string) => {
+                if (
+                  !(typeof header === 'string' && typeof value === 'string')
+                ) {
+                  throw strings.errors.registry
+                    .COMPONENT_SET_HEADER_PARAMETERS_NOT_VALID;
+                }
+
+                if (header && value) {
+                  responseHeaders = responseHeaders || {};
+                  responseHeaders[header.toLowerCase()] = value;
+                }
+              },
+              setCookie: (
+                name?: string,
+                value?: any,
+                options?: CookieOptions
+              ) => {
+                if (typeof name !== 'string') {
+                  throw strings.errors.registry
+                    .COMPONENT_SET_COOKIE_PARAMETERS_NOT_VALID;
+                }
+                responseCookies.push({ name, value, options });
+              },
+              templates: repository.getTemplatesInfo(),
+              streamSymbol: stream
+            };
+
+            const setCallbackTimeout = () => {
+              const executionTimeout = conf.executionTimeout;
+              if (executionTimeout) {
+                callbackTimeout = setTimeout(() => {
+                  const message = `timeout (${executionTimeout * 1000}ms)`;
+                  returnComponent({ message }, undefined);
+                }, executionTimeout * 1000);
+              }
+            };
+
+            // Data providers are callback-style; a synchronous throw is
+            // routed to the error handler and a returned promise gets a
+            // rejection handler. Errors escaping asynchronously (e.g. thrown
+            // inside a setTimeout callback) are the host's problem.
+            const callDataProvider = (
+              processData: (ctx: unknown, cb: unknown) => unknown,
+              onError: (err: unknown) => void
+            ) => {
+              try {
+                setCallbackTimeout();
+                const result = processData(contextObj, returnComponent);
+                if (result && typeof (result as Promise<unknown>).then === 'function') {
+                  (result as Promise<unknown>).catch(onError);
+                }
+              } catch (e) {
+                onError(e);
+              }
+            };
+
+            if (cached !== undefined && !conf.hotReloading) {
+              callDataProvider(cached, (e) => returnComponent(e, undefined));
+            } else {
+              const handleError = (err: any) => {
+                if (err.code === 'DATA_RESOLVING_ERROR') {
+                  componentCallbackDone = true;
+                  return callback({
+                    status: 502,
+                    response: {
+                      code: err.code,
+                      error: strings.errors.registry.RESOLVING_ERROR
+                    }
+                  });
+                }
+
+                if (err.code === 'DEPENDENCY_MISSING_FROM_REGISTRY') {
+                  componentCallbackDone = true;
+                  return callback({
+                    status: 501,
+                    response: {
+                      code: err.code,
+                      error: strings.errors.registry.DEPENDENCY_NOT_FOUND(
+                        err.missing.join(', ')
+                      ),
+                      missingDependencies: err.missing
+                    }
+                  });
+                }
+
+                returnComponent(err, undefined);
+              };
+
+              const loadDataProvider = async () => {
+                const dataProvider = await repository
+                  .getDataProvider(component.name, component.version)
+                  .catch(() => {
+                    throw { code: 'DATA_RESOLVING_ERROR', missing: [] };
+                  });
+                const context = {
+                  require: RequireWrapper(conf.dependencies),
+                  module: {
+                    exports: {} as Record<string, (...args: any[]) => any>
+                  },
+                  exports: {} as Record<string, (...args: any[]) => any>,
+                  console: conf.local ? console : noopConsole,
+                  setTimeout,
+                  clearTimeout,
+                  Buffer,
+                  Error,
+                  AbortController: globalThis?.AbortController,
+                  AbortSignal: globalThis?.AbortSignal,
+                  Promise,
+                  Date,
+                  Symbol,
+                  eval: undefined,
+                  URL: globalThis?.URL,
+                  URLSearchParams: globalThis?.URLSearchParams,
+                  crypto: globalThis?.crypto,
+                  fetch: globalThis?.fetch,
+                  process: {
+                    env: {
+                      NODE_ENV: conf.local ? 'development' : 'production',
+                      ...conf.env,
+                      ...env
+                    }
+                  }
+                };
+                const vmOptions = conf.local
+                  ? {
+                      displayErrors: true,
+                      filename: dataProvider.filePath
+                    }
+                  : {};
+
+                vm.runInNewContext(dataProvider.content, context, vmOptions);
+                const processData =
+                  context.module.exports['data'] || context.exports['data'];
+                cache.set('file-contents', cacheKey, processData);
+                return processData;
+              };
+
+              const dataProviderPromise = conf.hotReloading
+                ? loadDataProvider()
+                : singleFlight(cacheKey, loadDataProvider);
+              dataProviderPromise
+                .then((processData) => {
+                  callDataProvider(processData, handleError);
+                })
+                .catch(handleError);
+            }
+          });
+        }
+      }
+    );
+  };
+
+  const nestedRenderer = NestedRenderer(renderer, conf);
+  const nestedRenderComponent = fromPromise(nestedRenderer.renderComponent);
+  const nestedRenderComponents = fromPromise(nestedRenderer.renderComponents);
+  const getComponentCb = fromPromise(repository.getComponent);
+
+  return renderer;
+}

@@ -1,0 +1,2 @@
+var __ocEscape=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var oc=oc||{};oc.components=oc.components||{};oc.components['5eda5aa14527cd5988f1c999bab8ba4fd520da8e']=function(model){return '<span>hi ' + __ocEscape(model && model.firstName) + ' ' + __ocEscape(model && model.lastName) + ' (' + __ocEscape(model && model.nick) + ')</span>'};

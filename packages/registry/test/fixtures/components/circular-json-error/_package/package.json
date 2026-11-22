@@ -1,0 +1,27 @@
+{
+	"name": "circular-json-error",
+	"description": "",
+	"version": "1.0.0",
+	"repository": "",
+	"oc": {
+		"files": {
+			"dataProvider": {
+				"type": "node.js",
+				"hashKey": "a8368ddd8565a5c78d68b1eddc6ec841fc788510",
+				"src": "server.js",
+				"size": 142
+			},
+			"template": {
+				"type": "oc-template-es6",
+				"hashKey": "2ec3b9da01f6fb7a6060a690b31074e4eddf9d1f",
+				"src": "template.js",
+				"version": "2.0.0",
+				"size": 349
+			},
+			"static": []
+		},
+		"version": "0.50.67",
+		"packaged": true,
+		"date": 1462464333369
+	}
+}

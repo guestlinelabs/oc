@@ -1,0 +1,274 @@
+const expect = require('chai').expect;
+
+describe('registry : domain : options-sanitiser', () => {
+  const sanitise =
+    require('../../dist/registry/domain/options-sanitiser').default;
+
+  describe('when options is empty', () => {
+    const options = { baseUrl: 'http://my-registry.com' };
+    const defaults = {
+      prefix: '/',
+      tempDir: './temp/',
+      hotReloading: false,
+      verbosity: 0,
+      cors: {
+        origin: '*',
+        credentials: true,
+        allowedHeaders:
+          'Origin, X-Requested-With, Content-Type, Accept, traceparent',
+        methods: 'GET, OPTIONS, PUT, POST'
+      },
+      timeout: 120000,
+      dataProvider: { enabled: true }
+    };
+
+    for (const [property, value] of Object.entries(defaults)) {
+      it(`should set ${property} to ${JSON.stringify(value)}`, () => {
+        expect(sanitise(options)[property]).to.eql(value);
+      });
+    }
+  });
+
+  describe('dataProvider configuration', () => {
+    it('should keep dataProvider.enabled when explicitly disabled', () => {
+      const options = {
+        baseUrl: 'http://my-registry.com',
+        dataProvider: { enabled: false }
+      };
+
+      expect(sanitise(options).dataProvider).to.eql({ enabled: false });
+    });
+
+    it('should default dataProvider.enabled to true when the object is partial', () => {
+      const options = { baseUrl: 'http://my-registry.com', dataProvider: {} };
+
+      expect(sanitise(options).dataProvider).to.eql({ enabled: true });
+    });
+  });
+
+  describe('discovery.transformInfo', () => {
+    it('should keep the function', () => {
+      const transformInfo = (info) => info;
+      const options = {
+        baseUrl: 'http://my-registry.com',
+        discovery: { ui: false, transformInfo }
+      };
+
+      expect(sanitise(options).discovery.transformInfo).to.equal(transformInfo);
+    });
+
+    it('should not add the key when it is not provided', () => {
+      const options = { baseUrl: 'http://my-registry.com', discovery: {} };
+
+      expect(sanitise(options).discovery).to.not.have.property('transformInfo');
+    });
+  });
+
+  describe('when verbosity is provided', () => {
+    const options = { baseUrl: 'http://my-registry.com', verbosity: 3 };
+
+    it('should leave value untouched', () => {
+      expect(sanitise(options).verbosity).to.equal(3);
+    });
+  });
+
+  describe('cors configuration', () => {
+    it('should normalize partial custom values', () => {
+      const options = sanitise({
+        baseUrl: 'http://my-registry.com',
+        cors: {
+          origin: 'https://app.example.com',
+          credentials: false,
+          allowedHeaders: ['Content-Type', 'X-Request-Id'],
+          methods: ['GET', 'OPTIONS']
+        }
+      });
+
+      expect(options.cors).to.eql({
+        origin: 'https://app.example.com',
+        credentials: false,
+        allowedHeaders: 'Content-Type, X-Request-Id',
+        methods: 'GET, OPTIONS'
+      });
+    });
+  });
+
+  describe('fallbackRegistryUrl', () => {
+    describe("when fallbackRegistryUrl doesn't contain / at the end of url", () => {
+      const options = {
+        fallbackRegistryUrl: 'http://test-url.com',
+        baseUrl: 'http://my-registry.com'
+      };
+
+      it('should add `/` at the end of url', () => {
+        expect(sanitise(options).fallbackRegistryUrl).to.be.eql(
+          'http://test-url.com/'
+        );
+      });
+    });
+
+    describe('when fallbackRegistryUrl contains `/` at the end of url', () => {
+      const options = {
+        fallbackRegistryUrl: 'http://test-url.com/',
+        baseUrl: 'http://my-registry.com'
+      };
+
+      it('should not modify fallbackRegistryUrl url', () => {
+        expect(sanitise(options).fallbackRegistryUrl).to.be.eql(
+          'http://test-url.com/'
+        );
+      });
+    });
+  });
+
+  describe('prefix and baseUrl sanitization', () => {
+    const prefixAndBaseUrlScenarios = [
+      {
+        options: { baseUrl: 'http://my-registry.com' },
+        expected: { baseUrl: 'http://my-registry.com/', prefix: '/' }
+      },
+      {
+        options: { baseUrl: 'http://my-registry.com/' },
+        expected: { baseUrl: 'http://my-registry.com/', prefix: '/' }
+      },
+      {
+        options: { prefix: '/', baseUrl: 'http://my-registry.com' },
+        expected: { baseUrl: 'http://my-registry.com/', prefix: '/' }
+      },
+      {
+        options: { prefix: '/', baseUrl: 'http://my-registry.com/' },
+        expected: { baseUrl: 'http://my-registry.com/', prefix: '/' }
+      },
+      {
+        options: { prefix: '/-/', baseUrl: 'http://my-registry.com' },
+        expected: { baseUrl: 'http://my-registry.com/-/', prefix: '/-/' }
+      },
+      {
+        options: { prefix: '/-/', baseUrl: 'http://my-registry.com/' },
+        expected: { baseUrl: 'http://my-registry.com/-/', prefix: '/-/' }
+      },
+      {
+        options: { prefix: '/-/', baseUrl: 'http://my-registry.com/-/' },
+        expected: { baseUrl: 'http://my-registry.com/-/', prefix: '/-/' }
+      }
+    ];
+
+    it('should support various scenarios correctly', () => {
+      for (const scenario of prefixAndBaseUrlScenarios) {
+        expect(sanitise(scenario.options).prefix).to.equal(
+          scenario.expected.prefix
+        );
+        expect(sanitise(scenario.options).baseUrl).to.equal(
+          scenario.expected.baseUrl
+        );
+      }
+    });
+  });
+
+  describe('when pollingInterval', () => {
+    describe('is provided', () => {
+      const options = { baseUrl: 'dummy', pollingInterval: 10 };
+      it('should not modify it', () => {
+        expect(sanitise(options).pollingInterval).to.deep.equal(10);
+      });
+    });
+
+    describe('is not provided', () => {
+      const options = { baseUrl: 'dummy' };
+      it('should initialize it as 5000', () => {
+        expect(sanitise(options).pollingInterval).to.deep.equal(5);
+      });
+    });
+  });
+
+  describe('when templates', () => {
+    describe('is provided', () => {
+      const options = {
+        baseUrl: 'dummy',
+        templates: [{ name: 'hi' }],
+        compileClient: false
+      };
+      it('should not modify it', () => {
+        expect(sanitise(options).templates).to.deep.equal([{ name: 'hi' }]);
+      });
+    });
+
+    describe('is not provided', () => {
+      const options = { baseUrl: 'dummy' };
+      it('should initialize it as 5000', () => {
+        expect(sanitise(options).templates).to.deep.equal([]);
+      });
+    });
+  });
+
+  describe('when env', () => {
+    describe('is provided', () => {
+      const options = { baseUrl: 'dummy', env: { value: 'test' } };
+      it('should not modify it', () => {
+        expect(sanitise(options).env).to.deep.equal({ value: 'test' });
+      });
+    });
+
+    describe('is not provided', () => {
+      const options = { baseUrl: 'dummy' };
+      it('should initialize it as an empty {}', () => {
+        expect(sanitise(options).env).to.deep.equal({});
+      });
+    });
+  });
+
+  describe('storage adapter configuration', () => {
+    describe('when refreshInterval', () => {
+      describe('is provided', () => {
+        const options = {
+          refreshInterval: 666,
+          storage: { options: {} },
+          baseUrl: 'dummy'
+        };
+        it('should pass the refreshInterval to the storage options', () => {
+          expect(sanitise(options).storage.options.refreshInterval).to.equal(
+            666
+          );
+        });
+      });
+    });
+
+    describe('when verbosity', () => {
+      describe('is provided', () => {
+        const options = {
+          verbosity: true,
+          storage: { options: {} },
+          baseUrl: 'dummy'
+        };
+        it('should pass the verbosity to the storage options', () => {
+          expect(sanitise(options).storage.options.verbosity).to.equal(true);
+        });
+      });
+    });
+
+    describe('when storage.path', () => {
+      describe('does not include a protocol', () => {
+        const options = {
+          storage: { options: { path: '//someprovider.com' } },
+          baseUrl: 'dummy'
+        };
+        it('should sanitize the path to rely on the https protocol', () => {
+          expect(sanitise(options).storage.options.path).to.equal(
+            'https://someprovider.com'
+          );
+        });
+      });
+      describe('does include a prefix', () => {
+        const options = {
+          storage: { path: 'http://someprovider.com' },
+          baseUrl: 'dummy'
+        };
+        it('should not modify it', () => {
+          expect(sanitise(options).storage.path).to.equal(
+            'http://someprovider.com'
+          );
+        });
+      });
+    });
+  });
+});

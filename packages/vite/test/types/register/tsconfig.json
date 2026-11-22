@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"strict": true,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"target": "es2022",
+		"noEmit": true,
+		"skipLibCheck": true,
+		"paths": {
+			"@guestlinelabs/oc-vite": ["../../../dist/index.d.ts"],
+			"@guestlinelabs/oc-vite/client": ["../../../dist/client.d.ts"]
+		}
+	},
+	"files": ["client.ts"]
+}

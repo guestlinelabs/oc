@@ -1,0 +1,176 @@
+import strings from '../../resources';
+import type { Plugin, Plugins } from '../../types';
+import pLimit from '../../utils/pLimit';
+
+function validatePlugins(plugins: unknown[]): asserts plugins is Plugin[] {
+  for (let idx = 0; idx < plugins.length; idx++) {
+    const plugin = plugins[idx] as Plugin;
+    if (
+      (!plugin.register && typeof plugin.register !== 'object') ||
+      typeof plugin.register.register !== 'function' ||
+      typeof plugin.register.execute !== 'function' ||
+      typeof plugin.name !== 'string'
+    ) {
+      throw new Error(
+        strings.errors.registry.PLUGIN_NOT_VALID(plugin.name || String(idx + 1))
+      );
+    }
+  }
+}
+
+function checkDependencies(plugins: Plugin[]) {
+  const graph = new Map<string, string[]>(
+    plugins.map((plugin) => [plugin.name, []])
+  );
+
+  for (const p of plugins) {
+    if (!p.register.dependencies) {
+      return;
+    }
+
+    for (const d of p.register.dependencies) {
+      if (!graph.has(d)) {
+        throw new Error(`unknown plugin dependency: ${d}`);
+      }
+      graph.get(p.name)!.push(d);
+    }
+  }
+
+  const visited = new Set<string>();
+  const visit = (node: string, path: string[]) => {
+    if (visited.has(node)) return;
+    if (path.includes(node)) {
+      throw new Error(
+        `Dependency Cycle Found: ${[...path, node].join(' -> ')}`
+      );
+    }
+    for (const dependency of graph.get(node)!) {
+      visit(dependency, [...path, node]);
+    }
+    visited.add(node);
+  };
+
+  for (const node of graph.keys()) {
+    visit(node, []);
+  }
+}
+
+const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
+  typeof (value as PromiseLike<unknown> | undefined)?.then === 'function';
+
+const registerPlugin = (
+  plugin: Plugin,
+  dependencies: Record<string, unknown>
+): Promise<void> => {
+  const register = plugin.register.register as (
+    options: unknown,
+    dependencies: Record<string, unknown>,
+    next: (error?: Error) => void
+  ) => unknown;
+
+  return new Promise((resolve, reject) => {
+    const next = (error?: Error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    };
+
+    let result: unknown;
+    try {
+      result = register(plugin.options || {}, dependencies, next);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    if (register.length >= 3) {
+      // Classic callback form `register(options, dependencies, next)`:
+      // completion is signalled through `next`. A returned promise is still
+      // awaited so a rejection cannot go unhandled, but `next` wins when it
+      // fires first.
+      if (isPromiseLike(result)) {
+        result.then(() => resolve(), reject);
+      }
+      return;
+    }
+
+    // Modern form `register(options, dependencies)`: the return value may be
+    // a plain value or a promise.
+    Promise.resolve(result).then(() => resolve(), reject);
+  });
+};
+
+export async function init(pluginsToRegister: unknown[]): Promise<Plugins> {
+  const registered: Plugins = {};
+  const deferredLoads: Plugin[] = [];
+
+  validatePlugins(pluginsToRegister);
+  checkDependencies(pluginsToRegister);
+
+  const dependenciesRegistered = (dependencies: string[]) => {
+    if (dependencies.length === 0) {
+      return true;
+    }
+
+    let present = true;
+    for (const d of dependencies) {
+      if (!registered[d]) {
+        present = false;
+      }
+    }
+
+    return present;
+  };
+
+  const loadPlugin = async (plugin: Plugin): Promise<void> => {
+    if (registered[plugin.name]) {
+      return;
+    }
+
+    if (!plugin.register.dependencies) {
+      plugin.register.dependencies = [];
+    }
+
+    if (!dependenciesRegistered(plugin.register.dependencies)) {
+      deferredLoads.push(plugin);
+      return;
+    }
+
+    const dependencies = Object.fromEntries(
+      Object.entries(registered).filter(([key]) =>
+        plugin.register.dependencies?.includes(key)
+      )
+    );
+
+    await registerPlugin(plugin, dependencies);
+    registered[plugin.name] = {
+      handler: plugin.register.execute as any,
+      description: plugin.description || '',
+      context: plugin.context || false
+    };
+  };
+
+  const terminator = async (): Promise<Plugins> => {
+    if (deferredLoads.length > 0) {
+      const deferredPlugins = [...deferredLoads];
+      deferredLoads.length = 0;
+
+      await Promise.all(
+        deferredPlugins.map((plugin) => onSeries(() => loadPlugin(plugin)))
+      );
+      return terminator();
+    }
+
+    return registered;
+  };
+
+  const onSeries = pLimit(1);
+
+  await Promise.all(
+    pluginsToRegister.map((plugin) => onSeries(() => loadPlugin(plugin)))
+  );
+
+  return terminator();
+}

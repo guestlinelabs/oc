@@ -1,0 +1,504 @@
+const createRenderTemplate = require('../../dist/vendor/oc-client/template-renderer');
+const expect = require('chai').expect;
+const injectr = require('injectr');
+const sinon = require('sinon');
+
+describe('registry : routes : helpers : get-component', () => {
+  const mockedComponents = require('../fixtures/mocked-components');
+  let fireStub;
+  let mockedRepository;
+  let GetComponent;
+  const templates = {
+    'oc-template-es6': require('../../dist/registry/domain/templates').es6Template
+  };
+  const initialise = (params) => {
+    fireStub = sinon.stub();
+    GetComponent = injectr(
+      '../../dist/registry/routes/helpers/get-component.js',
+      {
+        '../../domain/events-handler': {
+          on: () => {},
+          fire: fireStub,
+          hasListeners: () => true
+        },
+        '../../../vendor/oc-client/template-renderer': (templateModules) => {
+          const renderTemplate = createRenderTemplate(templateModules);
+          return (template, data, renderOptions, cb) => {
+            if (renderOptions.templateType === 'oc-template-supported') {
+              renderOptions.templateType = 'oc-template-es6';
+            }
+            return renderTemplate(template, data, renderOptions, cb);
+          };
+        }
+      },
+      { console, Buffer, clearTimeout, setTimeout, process }
+    ).default;
+
+    mockedRepository = {
+      getCompiledView: sinon.stub().resolves(params.view),
+      getComponent: sinon.stub().resolves(params.package),
+      getEnv: params.package.oc.files.env
+        ? sinon.stub().resolves({ secret: 'secretvalue' })
+        : sinon.stub().rejects(),
+      getDataProvider: sinon
+        .stub()
+        .resolves({ content: params.data, filePath: '/path/to/server.js' }),
+      getTemplatesInfo: sinon.stub().returns([
+        {
+          type: 'oc-template-es6',
+          version: '6.0.1',
+          externals: []
+        },
+        {
+          type: 'oc-template-es6',
+          version: '6.0.2',
+          externals: []
+        },
+        {
+          type: 'oc-template-supported',
+          version: '1.2.3',
+          externals: []
+        }
+      ]),
+      getTemplate: (type) =>
+        type === 'oc-template-supported'
+          ? templates['oc-template-es6']
+          : templates[type],
+      getStaticFilePath: sinon.stub().returns('//my-cdn.com/files/')
+    };
+  };
+
+  describe('when the component has an env file', () => {
+    let callBack;
+
+    before((done) => {
+      const headers = {
+        'user-agent': 'oc-client-0/0-0-0',
+        templates: 'oc-template-es6,2.0.0',
+        accept: 'application/vnd.oc.unrendered+json'
+      };
+      initialise(mockedComponents['env-component']);
+      const getComponent = GetComponent({}, mockedRepository);
+
+      callBack = sinon.spy(() => done());
+      getComponent(
+        {
+          name: 'env-component',
+          headers,
+          parameters: {},
+          version: '1.X.X',
+          conf: {
+            env: { registry: 'REGISTRYVALUE', booleanValue: false },
+            baseUrl: 'http://components.com/'
+          }
+        },
+        callBack
+      );
+    });
+
+    it('should put the env data as part of the context, available to the server', () => {
+      expect(callBack.args[0][0].response.data).to.deep.equal({
+        mySecret: 'secretvalue',
+        contextBoolean: false,
+        processBoolean: false
+      });
+    });
+  });
+
+  describe('when getting a component with success', () => {
+    before((done) => {
+      initialise(mockedComponents['async-error2-component']);
+      const getComponent = GetComponent({}, mockedRepository);
+
+      getComponent(
+        {
+          name: 'async-error2-component',
+          headers: {},
+          parameters: {},
+          version: '1.X.X',
+          conf: { baseUrl: 'http://components.com/' }
+        },
+        () => done()
+      );
+    });
+
+    it('should fire a component-retrieved event', () => {
+      const [eventName, eventData] = fireStub.args[0];
+
+      expect(eventName).to.equal('component-retrieved');
+      expect(eventData.headers).to.eql({});
+      expect(eventData.name).to.equal('async-error2-component');
+      expect(eventData.parameters).to.eql({});
+      expect(eventData.requestVersion).to.equal('1.X.X');
+      expect(eventData.href).to.equal(
+        'http://components.com/async-error2-component/1.X.X'
+      );
+      expect(eventData.version).to.equal('1.0.0');
+      expect(eventData.renderMode).to.equal('rendered');
+      expect(eventData.duration).to.be.above(0);
+      expect(eventData.status).to.equal(200);
+    });
+  });
+
+  describe('when getting a component with failure', () => {
+    before((done) => {
+      initialise(mockedComponents['async-error2-component']);
+      const getComponent = GetComponent({}, mockedRepository);
+
+      getComponent(
+        {
+          name: 'async-error2-component',
+          headers: {},
+          parameters: { error: true },
+          version: '1.X.X',
+          conf: { baseUrl: 'http://components.com/' }
+        },
+        () => done()
+      );
+    });
+
+    it('should fire a data-provider-error event', () => {
+      const [eventName, eventData] = fireStub.args[0];
+
+      expect(eventName).to.equal('data-provider-error');
+      expect(eventData.name).to.equal('async-error2-component');
+      expect(eventData.parameters).to.eql({ error: true });
+      expect(eventData.requestVersion).to.equal('1.X.X');
+      expect(eventData.version).to.equal('1.0.0');
+      expect(eventData.status).to.equal(500);
+      expect(eventData.error).to.be.an('error');
+    });
+
+    it('should fire a component-retrieved event', () => {
+      const [eventName, eventData] = fireStub.args[1];
+
+      expect(eventName).to.equal('component-retrieved');
+      expect(eventData.headers).to.eql({});
+      expect(eventData.name).to.equal('async-error2-component');
+      expect(eventData.parameters).to.eql({ error: true });
+      expect(eventData.requestVersion).to.equal('1.X.X');
+      expect(eventData.href).to.equal(
+        'http://components.com/async-error2-component/1.X.X?error=true'
+      );
+      expect(eventData.version).to.equal('1.0.0');
+      expect(eventData.renderMode).to.equal('rendered');
+      expect(eventData.duration).to.be.above(0);
+      expect(eventData.status).to.equal(500);
+    });
+  });
+
+  describe('when the component sends a custom status code', () => {
+    before((done) => {
+      initialise(mockedComponents['async-custom-error-component']);
+      const getComponent = GetComponent({}, mockedRepository);
+
+      getComponent(
+        {
+          name: 'async-custom-error-component',
+          headers: {},
+          version: '1.X.X',
+          conf: { baseUrl: 'http://components.com/' }
+        },
+        () => done()
+      );
+    });
+
+    it('should return that status code to the client', () => {
+      expect(fireStub.args[0][1].status).to.equal(404);
+    });
+  });
+
+  describe('when oc-client requests an unrendered es6 component', () => {
+    describe("when it doesn't provide a templates header", () => {
+      const headers = {
+        'user-agent': 'oc-client-0/0-0-0',
+        accept: 'application/vnd.oc.unrendered+json'
+      };
+      let callBack;
+
+      before((done) => {
+        initialise(mockedComponents['async-error2-component']);
+        const getComponent = GetComponent({}, mockedRepository);
+        callBack = sinon.spy(() => done());
+        getComponent(
+          {
+            name: 'async-error2-component',
+            headers,
+            parameters: {},
+            version: '1.X.X',
+            conf: { baseUrl: 'http://components.com/' }
+          },
+          callBack
+        );
+      });
+
+      it('should return the rendered version', () => {
+        expect(callBack.args[0][0].response.template).to.equal(undefined);
+        expect(callBack.args[0][0].response.html).to.equal('<div>hello</div>');
+        expect(callBack.args[0][0].response.renderMode).to.equal('rendered');
+        expect(fireStub.args[0][1].renderMode).to.equal('rendered');
+      });
+    });
+
+    describe('when it supports the correct template', () => {
+      const headers = {
+        'user-agent': 'oc-client-0/0-0-0',
+        templates: 'oc-template-es6,2.0.0',
+        accept: 'application/vnd.oc.unrendered+json'
+      };
+      let callBack;
+
+      before((done) => {
+        initialise(mockedComponents['async-error2-component']);
+        const getComponent = GetComponent({}, mockedRepository);
+        callBack = sinon.spy(() => done());
+        getComponent(
+          {
+            name: 'async-error2-component',
+            headers,
+            parameters: {},
+            version: '1.X.X',
+            conf: { baseUrl: 'http://components.com/' }
+          },
+          callBack
+        );
+      });
+
+      it('should return the unrendered version', () => {
+        expect(callBack.args[0][0].response.html).to.equal(undefined);
+        expect(callBack.args[0][0].response.template).to.deep.equal({
+          key: '8c1fbd954f2b0d8cd5cf11c885fed4805225749f',
+          src: '//my-cdn.com/files/',
+          type: 'oc-template-es6'
+        });
+        expect(callBack.args[0][0].response.renderMode).to.equal('unrendered');
+        expect(fireStub.args[0][1].renderMode).to.equal('unrendered');
+      });
+    });
+  });
+
+  describe('when rendering a component with another template', () => {
+    describe('when the registry supports the template', () => {
+      describe("when oc-client requests an unrendered component and the client doesn't support it", () => {
+        const headers = {
+          'user-agent': 'oc-client-0/0-0-0',
+          templates: 'oc-template-es6,2.0.0',
+          accept: 'application/vnd.oc.unrendered+json'
+        };
+        let callBack;
+
+        before((done) => {
+          initialise(mockedComponents['async-error3-component']);
+          const getComponent = GetComponent({}, mockedRepository);
+          callBack = sinon.spy(() => done());
+          getComponent(
+            {
+              name: 'async-error3-component',
+              headers,
+              parameters: {},
+              version: '1.X.X',
+              conf: { baseUrl: 'http://components.com/' }
+            },
+            callBack
+          );
+        });
+
+        it('should return the rendered version', () => {
+          expect(callBack.args[0][0].response.template).to.equal(undefined);
+          expect(callBack.args[0][0].response.html).to.equal(
+            '<div>hello</div>'
+          );
+          expect(callBack.args[0][0].response.renderMode).to.equal('rendered');
+          expect(fireStub.args[0][1].renderMode).to.equal('rendered');
+        });
+      });
+
+      describe('when oc-client requests an unrendered component and the client supports the correct template', () => {
+        const headers = {
+          'user-agent': 'oc-client-0/0-0-0',
+          templates:
+            'oc-template-es6,2.0.0;oc-template-supported,1.2.3',
+          accept: 'application/vnd.oc.unrendered+json'
+        };
+        let callBack;
+
+        before((done) => {
+          initialise(mockedComponents['async-error3-component']);
+          const getComponent = GetComponent({}, mockedRepository);
+          callBack = sinon.spy(() => done());
+          getComponent(
+            {
+              name: 'async-error3-component',
+              headers,
+              parameters: {},
+              version: '1.X.X',
+              conf: { baseUrl: 'http://components.com/' }
+            },
+            callBack
+          );
+        });
+
+        it('should return the unrendered version', () => {
+          expect(callBack.args[0][0].response.html).to.equal(undefined);
+          expect(callBack.args[0][0].response.template).to.deep.equal({
+            key: '8c1fbd954f2b0d8cd5cf11c885fed4805225749f',
+            src: '//my-cdn.com/files/',
+            type: 'oc-template-supported'
+          });
+          expect(callBack.args[0][0].response.renderMode).to.equal(
+            'unrendered'
+          );
+          expect(fireStub.args[0][1].renderMode).to.equal('unrendered');
+        });
+      });
+    });
+
+    describe("when the registry doesn't support the template", () => {
+      describe("when oc-client requests an unrendered component and the client doesn't support it", () => {
+        const headers = {
+          'user-agent': 'oc-client-0/0-0-0',
+          templates: 'oc-template-es6,2.0.0',
+          accept: 'application/vnd.oc.unrendered+json'
+        };
+        let callBack;
+
+        before((done) => {
+          initialise(mockedComponents['async-error4-component']);
+          const getComponent = GetComponent({}, mockedRepository);
+          callBack = sinon.spy(() => done());
+          getComponent(
+            {
+              name: 'async-error4-component',
+              headers,
+              parameters: {},
+              version: '1.X.X',
+              conf: { baseUrl: 'http://components.com/' }
+            },
+            callBack
+          );
+        });
+
+        it('should return an error', () => {
+          expect(callBack.args[0][0].status).to.equal(400);
+          expect(callBack.args[0][0].response.code).to.equal(
+            'TEMPLATE_NOT_SUPPORTED'
+          );
+          expect(callBack.args[0][0].response.error).to.equal(
+            'oc-template-notsupported is not a supported oc-template'
+          );
+        });
+      });
+
+      describe('when oc-client requests an unrendered component and the client supports the correct template', () => {
+        const headers = {
+          'user-agent': 'oc-client-0/0-0-0',
+          templates:
+            'oc-template-es6,2.0.0;oc-template-unsupported,1.2.3',
+          accept: 'application/vnd.oc.unrendered+json'
+        };
+        let callBack;
+
+        before((done) => {
+          initialise(mockedComponents['async-error4-component']);
+          const getComponent = GetComponent({}, mockedRepository);
+          callBack = sinon.spy(() => done());
+          getComponent(
+            {
+              name: 'async-error4-component',
+              headers,
+              parameters: {},
+              version: '1.X.X',
+              conf: { baseUrl: 'http://components.com/' }
+            },
+            callBack
+          );
+        });
+
+        it('should return an error', () => {
+          expect(callBack.args[0][0].status).to.equal(400);
+          expect(callBack.args[0][0].response.code).to.equal(
+            'TEMPLATE_NOT_SUPPORTED'
+          );
+          expect(callBack.args[0][0].response.error).to.equal(
+            'oc-template-notsupported is not a supported oc-template'
+          );
+        });
+      });
+    });
+  });
+
+  describe('when concurrent cold renders request the same component', () => {
+    const renderTwice = (done) => {
+      const simpleComponent = mockedComponents['simple-component'];
+      initialise({
+        ...simpleComponent,
+        package: {
+          ...simpleComponent.package,
+          name: 'single-flight-component',
+          version: '9.9.9'
+        }
+      });
+      const getComponent = GetComponent({}, mockedRepository);
+      let completed = 0;
+      const callback = () => {
+        completed++;
+        if (completed === 2) done();
+      };
+      const options = {
+        name: 'simple-component',
+        headers: {},
+        parameters: {},
+        version: '1.0.0',
+        conf: { baseUrl: 'http://components.com/' }
+      };
+
+      getComponent(options, callback);
+      getComponent(options, callback);
+    };
+
+    it('should load and compile server.js and the template once', (done) => {
+      renderTwice(() => {
+        try {
+          expect(mockedRepository.getDataProvider.calledOnce).to.be.true;
+          expect(mockedRepository.getCompiledView.calledOnce).to.be.true;
+          done();
+        } catch (error) {
+          done(error);
+        }
+      });
+    });
+  });
+
+  describe('when a provider completes before its execution timeout', () => {
+    it('should clear the pending timeout', (done) => {
+      const clock = sinon.useFakeTimers();
+      initialise(mockedComponents['simple-component']);
+      const getComponent = GetComponent({}, mockedRepository);
+
+      getComponent(
+        {
+          name: 'simple-component',
+          headers: {},
+          parameters: {},
+          version: '1.0.0',
+          conf: {
+            baseUrl: 'http://components.com/',
+            executionTimeout: 1
+          }
+        },
+        (result) => {
+          try {
+            expect(result.status).to.equal(200);
+            expect(clock.countTimers()).to.equal(0);
+            expect(result).not.to.have.property('headers');
+            clock.restore();
+            done();
+          } catch (error) {
+            clock.restore();
+            done(error);
+          }
+        }
+      );
+    });
+  });
+});
