@@ -55,6 +55,7 @@ The script ([scripts/release.ts](scripts/release.ts)):
 With npm two-factor auth, pass `--otp <code>` or answer the prompt. If a
 publish fails part-way, fix the cause and run `bun run release` again; it
 resumes from the local release commit and only publishes what is missing.
+Running `bun run release` again once everything is on npm does nothing.
 
 ## License
 

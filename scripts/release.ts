@@ -18,7 +18,8 @@ import { parseArgs } from 'node:util';
  * "Release vX", tag vX, `bun publish --recursive` (dependency order, skips
  * versions already on npm, dist-tag = prerelease id or "latest"), then push
  * the commit and the tag. If publishing fails, fix the cause and run
- * `bun run release` again: it resumes from the local release commit.
+ * `bun run release` again: it resumes from the local release commit. When the
+ * version is already on npm for every package, it does nothing.
  */
 import { $ } from 'bun';
 
@@ -83,11 +84,19 @@ export function distTag(version: string): string {
   return id && !/^\d+$/.test(id) ? id : 'latest';
 }
 
-async function readVersions(): Promise<string[]> {
+async function readPackages(): Promise<{ name: string; version: string }[]> {
   return Promise.all(
-    PACKAGES.map(
-      async (dir) => (await Bun.file(`${dir}/package.json`).json()).version
-    )
+    PACKAGES.map(async (dir) => Bun.file(`${dir}/package.json`).json())
+  );
+}
+
+async function isOnNpm(name: string, version: string): Promise<boolean> {
+  const url = `https://registry.npmjs.org/${name.replace('/', '%2f')}/${version}`;
+  const res = await fetch(url, { method: 'HEAD' });
+  if (res.status === 404) return false;
+  if (res.ok) return true;
+  throw new Error(
+    `Could not check ${name}@${version} on npm: HTTP ${res.status}`
   );
 }
 
@@ -114,7 +123,8 @@ async function main(): Promise<void> {
   });
   const dryRun = values['dry-run'] === true;
 
-  const versions = await readVersions();
+  const packages = await readPackages();
+  const versions = packages.map((pkg) => pkg.version);
   if (new Set(versions).size !== 1) {
     throw new Error(`Packages are out of sync: ${versions.join(', ')}`);
   }
@@ -123,6 +133,19 @@ async function main(): Promise<void> {
   const target = bump ? increment(current, bump, values.preid) : current;
   const tag = distTag(target);
   const gitTag = `v${target}`;
+
+  const published = await Promise.all(
+    packages.map((pkg) => isOnNpm(pkg.name, target))
+  );
+  if (published.every(Boolean)) {
+    console.log(
+      `${target} is already on npm for every package; nothing to do.`
+    );
+    return;
+  }
+  if (target !== current && published.some(Boolean)) {
+    throw new Error(`${target} is already on npm for some packages.`);
+  }
 
   console.log(
     `Releasing ${target} (npm dist-tag "${tag}")${dryRun ? ' [dry run]' : ''}`
