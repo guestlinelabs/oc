@@ -10,6 +10,7 @@ import { ocDevEntryPlugin, ocDevServerPlugin } from './dev.js';
 import esmOCProviderTemplate from './esmOCProviderTemplate.js';
 import { ocExternalsPlugin } from './externals.js';
 import initialDataPlugin from './initialData.js';
+import { ocMinifyWhitespacePlugin } from './minifyWhitespace.js';
 import {
   assemblePackage,
   type ComponentPackage,
@@ -331,6 +332,7 @@ export function oc(options: OcPluginOptions = {}) {
     initialDataPlugin(),
     ocExternalsPlugin(() => state.componentPath),
     ocReactRuntimePlugin(),
+    ocMinifyWhitespacePlugin(state),
     ocDevEntryPlugin(state),
     ocDevServerPlugin(state)
   ];

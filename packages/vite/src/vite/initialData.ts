@@ -1,5 +1,7 @@
 import type { Plugin } from 'vite';
 
+import { prependLines } from './prependCode.js';
+
 /**
  * Port of `oc-vite-compiler`'s `InitialDataVariables` plugin: declares the
  * `__$$oc_initialData__` / `__$$oc_Settings__` globals the mount wrapper
@@ -14,11 +16,11 @@ export default function initialDataPlugin(): Plugin {
       for (const jsFile of jsFiles) {
         const template = bundle[jsFile];
         if (template.type !== 'chunk') continue;
-        template.code = `
-            var __$$oc_initialData__;
-            var __$$oc_Settings__;
-            ${template.code}
-          `;
+        prependLines(
+          template,
+          'var __$$oc_initialData__;\nvar __$$oc_Settings__;\n',
+          bundle
+        );
       }
     }
   };

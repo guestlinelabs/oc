@@ -64,7 +64,8 @@
 		"@types/node": "^25.9.9",
 		"bun-types": "^1.4.5",
 		"typescript": "^6.0.3",
-		"vite": "^8.0.0"
+		"vite": "^8.0.0",
+		"vite7": "npm:vite@7.3.8"
 	},
 	"dependencies": {
 		"@guestlinelabs/oc-registry": "workspace:*"

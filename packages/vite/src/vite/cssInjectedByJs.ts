@@ -1,5 +1,6 @@
 import type { Plugin, ResolvedConfig } from 'vite';
 import { loadComponentVite } from './componentVite.js';
+import { prependLines } from './prependCode.js';
 
 // Minimal rollup output types (vite 6/7 expose Rollup types, vite 8 Rolldown).
 interface OutputAsset {
@@ -161,18 +162,6 @@ function concatCssAndDeleteFromBundle(
   }, '');
 }
 
-function buildOutputChunkWithCssInjectionCode(
-  jsAssetCode: string,
-  cssInjectionCode: string,
-  topExecutionPriorityFlag: boolean
-) {
-  const appCode = jsAssetCode.replace(/\/\*\s*empty css\s*\*\//g, '');
-  jsAssetCode = topExecutionPriorityFlag ? '' : appCode;
-  jsAssetCode += cssInjectionCode;
-  jsAssetCode += !topExecutionPriorityFlag ? '' : appCode;
-  return jsAssetCode;
-}
-
 function clearImportedCssViteMetadataFromBundle(
   bundle: Record<string, OutputEntry>,
   unusedCssAssets: string[]
@@ -245,11 +234,11 @@ export default function cssInjectedByJsPlugin(
         for (const jsTargetKey of jsTargetBundleKeys) {
           const jsAsset = bundle[jsTargetKey];
           if (jsAsset.type !== 'chunk') continue;
-          jsAsset.code = buildOutputChunkWithCssInjectionCode(
-            jsAsset.code,
-            cssInjectionCode ?? '',
-            true
+          // Blank out Vite's placeholders without moving columns (source map).
+          jsAsset.code = jsAsset.code.replace(/\/\*\s*empty css\s*\*\//g, (m) =>
+            ' '.repeat(m.length)
           );
+          prependLines(jsAsset, cssInjectionCode ?? '', bundle);
         }
         clearImportedCssViteMetadataFromBundle(bundle, unusedCssAssets);
       }
