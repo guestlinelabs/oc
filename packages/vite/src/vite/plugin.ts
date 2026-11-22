@@ -239,7 +239,9 @@ function ocMainPlugin(
             entry: state.wrapperPath,
             formats: ['es'],
             name: 'template',
-            fileName: 'template'
+            // Always template.js: Vite names ES lib output .mjs when the
+            // component's package.json has no "type": "module".
+            fileName: () => 'template.js'
           }
         }
       };

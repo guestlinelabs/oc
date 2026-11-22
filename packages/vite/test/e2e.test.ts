@@ -181,4 +181,21 @@ describe('oc() end-to-end build', () => {
     expect(pkg.oc.packaged).toBe(true);
     expect(existsSync(path.join(fixtureDir, '_package', 'temp'))).toBe(false);
   }, 60_000);
+
+  test('emits template.js when the component package.json is not type module', async () => {
+    const pkgPath = path.join(fixtureDir, 'package.json');
+    const original = await fsp.readFile(pkgPath, 'utf8');
+    const { type: _type, ...commonJs } = JSON.parse(original);
+    await fsp.writeFile(pkgPath, JSON.stringify(commonJs, null, 2));
+    try {
+      await build({ root: fixtureDir, logLevel: 'silent' });
+      const files = await fsp.readdir(path.join(fixtureDir, '_package'));
+      expect(files).toContain('template.js');
+      expect(files).toContain('template.js.map');
+      expect(files.some((file) => file.endsWith('.mjs'))).toBe(false);
+      expect((await pkgJson()).oc.files.template.src).toBe('template.js');
+    } finally {
+      await fsp.writeFile(pkgPath, original);
+    }
+  }, 60_000);
 });
