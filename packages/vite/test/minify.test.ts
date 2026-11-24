@@ -103,7 +103,7 @@ describe.each(Object.entries(VITES))('%s', (_name, viteDir) => {
   test('production template.js has no indentation and a map that still points at the source', async () => {
     const { code, map } = await buildFixture(viteDir, 'production');
 
-    expect(code).toMatch(/export\s*\{/);
+    expect(code).toMatch(/export\s*(\{|function mount)/);
     expect(code).toContain('oc-minify-marker');
     expect(code.split('\n').filter((line) => /^\s+\S/.test(line))).toEqual([]);
 

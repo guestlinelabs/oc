@@ -133,7 +133,7 @@ describe('oc() end-to-end build', () => {
       path.join(fixtureDir, '_package', 'template.js'),
       'utf8'
     );
-    expect(template).toMatch(/export\s*\{/);
+    expect(template).toMatch(/export\s*(\{|function mount)/);
     expect(template).toContain('mount');
     expect(template).toContain('__$$oc_initialData__');
     expect(template).toContain('__$$oc_Settings__');

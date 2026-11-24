@@ -10,6 +10,7 @@ import { ocDevEntryPlugin, ocDevServerPlugin } from './dev.js';
 import esmOCProviderTemplate from './esmOCProviderTemplate.js';
 import { ocExternalsPlugin } from './externals.js';
 import initialDataPlugin from './initialData.js';
+import { ocInstanceIsolationPlugin } from './instanceIsolation.js';
 import { ocMinifyWhitespacePlugin } from './minifyWhitespace.js';
 import {
   assemblePackage,
@@ -30,6 +31,13 @@ export interface OcPluginOptions {
    * and unminified output.
    */
   production?: boolean;
+  /**
+   * Evaluate the component's code once per mounted instance (default
+   * `true`), so `getInitialData()`, `getSettings()` and `serverClient` see
+   * the instance's own values when a page mounts the component more than
+   * once. Set `false` to share one module scope between instances.
+   */
+  isolateInstances?: boolean;
 }
 
 function processRelativePath(componentPath: string, relativePath: string) {
@@ -332,6 +340,9 @@ export function oc(options: OcPluginOptions = {}) {
     initialDataPlugin(),
     ocExternalsPlugin(() => state.componentPath),
     ocReactRuntimePlugin(),
+    ocInstanceIsolationPlugin({
+      enabled: () => options.isolateInstances !== false
+    }),
     ocMinifyWhitespacePlugin(state),
     ocDevEntryPlugin(state),
     ocDevServerPlugin(state)

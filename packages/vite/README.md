@@ -56,6 +56,19 @@ The component's `package.json` points `oc.files.data` at the server entry and
 provider, actions, mocked plugins from `oc.json` and HMR. It must run under
 Bun.
 
+## Multiple instances on one page
+
+A page can mount the same component version several times with different
+parameters. Builds evaluate the component's code once per mounted instance,
+as the function-based OC templates did, so `getInitialData()`,
+`getSettings()` and `serverClient` always see the instance's own values, and
+module-level state (stores, caches, i18n instances) is per instance too.
+Code that must run once per page, such as `customElements.define`, needs a
+guard. `oc({ isolateInstances: false })` shares one module scope between
+instances instead; `getInitialData()` then returns the last-mounted
+instance's data, so pass `mount`'s `props` down explicitly. The `vite` dev
+server always shares one scope.
+
 ## License
 
 MIT

@@ -68,7 +68,8 @@
 		"vite7": "npm:vite@7.3.8"
 	},
 	"dependencies": {
-		"@guestlinelabs/oc-registry": "workspace:*"
+		"@guestlinelabs/oc-registry": "workspace:*",
+		"magic-string": "0.30.21"
 	},
 	"peerDependencies": {
 		"vite": "^6.0.0 || ^7.0.0 || ^8.0.0"
