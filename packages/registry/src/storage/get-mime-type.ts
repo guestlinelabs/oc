@@ -1,6 +1,7 @@
 export function getMimeType(extension: string) {
   return {
     '.js': 'application/javascript',
+    '.mjs': 'application/javascript',
     '.css': 'text/css',
     '.map': 'application/json',
     '.gif': 'image/gif',
